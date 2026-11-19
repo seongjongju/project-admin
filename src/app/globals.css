@@ -28,13 +28,19 @@
   --text-name--line-height: 1.45;
   --text-modal: 20px;
   --text-modal--line-height: 1.35;
+  --text-brand: 28px;
+  --text-brand--line-height: 1.25;
   --font-weight-strong: 600;
+  /* 이번 달 목록: 한 항목 높이 × 보이는 항목 수 = 스크롤 영역 최대 높이 */
+  --month-list-row: 48px;
+  --month-list-rows: 5;
 }
 
 @media (min-width: 768px) {
   :root {
     --text-ui: 16px;
     --text-title: 26px;
+    --text-brand: 34px;
   }
 }
 

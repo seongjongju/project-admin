@@ -39,9 +39,10 @@ function ProjectLink({ project }: { project: Project }) {
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="flex items-start justify-between gap-2 border-b border-line py-2.5 last:border-b-0 hover:text-accent"
+      title={project.title}
+      className="flex h-[var(--month-list-row)] items-center justify-between gap-2 border-b border-line last:border-b-0 hover:text-accent"
     >
-      <span className="text-ui font-medium break-words">{project.title}</span>
+      <span className="text-ui min-w-0 truncate font-medium">{project.title}</span>
       <span className="shrink-0">
         <KindBadge kind={project.kind} />
       </span>
@@ -82,7 +83,12 @@ export default function MonthlyProjects({ projects }: { projects: Project[] }) {
               {items.length === 0 ? (
                 <p className="mt-2 text-ui text-muted">{group.empty}</p>
               ) : (
-                <div className="mt-1">
+                <div
+                  tabIndex={0}
+                  role="group"
+                  aria-label={`${group.heading} 목록`}
+                  className="mt-1 max-h-[calc(var(--month-list-row)*var(--month-list-rows))] overflow-y-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                >
                   {items.map((project) => (
                     <ProjectLink key={project.id} project={project} />
                   ))}

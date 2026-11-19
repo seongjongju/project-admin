@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const menus = [
   { href: "/", label: "홈" },
@@ -10,30 +11,60 @@ const menus = [
   { href: "/personal", label: "개인 프로젝트" },
 ];
 
+function LogoutButton({ onDone }: { onDone?: () => void }) {
+  const router = useRouter();
+  const [pending, setPending] = useState(false);
+
+  async function handleLogout() {
+    setPending(true);
+    try {
+      await createClient().auth.signOut();
+    } finally {
+      onDone?.();
+      router.replace("/login");
+      router.refresh();
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleLogout}
+      disabled={pending}
+      className="mt-auto flex h-10 items-center border-l-2 border-transparent pl-3 text-left text-ui text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      {pending ? "로그아웃 중…" : "로그아웃"}
+    </button>
+  );
+}
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="주요 메뉴" className="mt-8 flex flex-col">
-      {menus.map((menu) => {
-        const active = pathname === menu.href;
-        return (
-          <Link
-            key={menu.href}
-            href={menu.href}
-            onClick={onNavigate}
-            aria-current={active ? "page" : undefined}
-            className={`flex h-10 items-center border-l-2 pl-3 text-ui transition-colors ${
-              active
-                ? "border-accent font-medium text-ink"
-                : "border-transparent text-muted hover:text-ink"
-            }`}
-          >
-            {menu.label}
-          </Link>
-        );
-      })}
-    </nav>
+    <div className="mt-8 flex flex-1 flex-col">
+      <nav aria-label="주요 메뉴" className="flex flex-col">
+        {menus.map((menu) => {
+          const active = pathname === menu.href;
+          return (
+            <Link
+              key={menu.href}
+              href={menu.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+              className={`flex h-10 items-center border-l-2 pl-3 text-ui transition-colors ${
+                active
+                  ? "border-accent font-medium text-ink"
+                  : "border-transparent text-muted hover:text-ink"
+              }`}
+            >
+              {menu.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <LogoutButton onDone={onNavigate} />
+    </div>
   );
 }
 

@@ -1,5 +1,8 @@
 import Sidebar from "./Sidebar";
 
+/**
+ * 로그인 확인은 proxy에서 끝난다. 여기는 화면 구성만 담당한다.
+ */
 export default function AdminLayout({
   children,
 }: {
