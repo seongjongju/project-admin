@@ -30,6 +30,14 @@ export function formatRange(start: string, end: string) {
   return start === end ? formatDate(start) : `${formatDate(start)} ~ ${formatDate(end)}`;
 }
 
+/** 목록용 짧은 기간. 같은 해는 연도를 생략해 320px에서도 잘리지 않게 한다. */
+export function formatRangeCompact(start: string, end: string) {
+  if (start.slice(0, 4) !== end.slice(0, 4)) {
+    return `${start.replace(/-/g, ".")} ~ ${end.replace(/-/g, ".")}`;
+  }
+  return `${start.slice(5).replace("-", ".")} ~ ${end.slice(5).replace("-", ".")}`;
+}
+
 export function startOfMonth(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }

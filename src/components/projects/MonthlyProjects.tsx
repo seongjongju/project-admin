@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { toDateKey } from "@/lib/date";
+import { formatRange, formatRangeCompact, toDateKey } from "@/lib/date";
 import type { Project, ProjectStatus } from "@/lib/store";
 import { KindBadge } from "./ProjectBadges";
 
@@ -39,10 +39,17 @@ function ProjectLink({ project }: { project: Project }) {
   return (
     <Link
       href={`/projects/${project.id}`}
-      title={project.title}
-      className="flex h-[var(--month-list-row)] items-center justify-between gap-2 border-b border-line last:border-b-0 hover:text-accent"
+      title={`${project.title} · ${formatRange(project.startDate, project.endDate)}`}
+      className="flex h-[var(--month-list-row)] items-center gap-2 border-b border-line last:border-b-0 hover:text-accent"
     >
-      <span className="text-ui min-w-0 truncate font-medium">{project.title}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-ui leading-tight font-medium">
+          {project.title}
+        </span>
+        <span className="block truncate text-ui leading-tight text-muted">
+          {formatRangeCompact(project.startDate, project.endDate)}
+        </span>
+      </span>
       <span className="shrink-0">
         <KindBadge kind={project.kind} />
       </span>
