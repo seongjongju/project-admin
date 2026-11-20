@@ -32,7 +32,7 @@ export default function ProjectForm({
 }: ProjectFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [kind, setKind] = useState<ProjectKind | "">(initial.kind);
-  const [category, setCategory] = useState(initial.category);
+  const [categoryId, setCategoryId] = useState(initial.categoryId);
   const [status, setStatus] = useState<ProjectStatus>(initial.status);
   const [startDate, setStartDate] = useState(initial.startDate);
   const [endDate, setEndDate] = useState(initial.endDate);
@@ -46,7 +46,7 @@ export default function ProjectForm({
 
   function changeKind(next: ProjectKind) {
     setKind(next);
-    if (next === "개인") setCategory("");
+    if (next === "개인") setCategoryId("");
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -76,7 +76,7 @@ export default function ProjectForm({
       await onSubmit({
         title: title.trim(),
         kind,
-        category: kind === "회사" ? category.trim() : "",
+        categoryId: kind === "회사" ? categoryId : "",
         status,
         startDate,
         endDate,
@@ -144,7 +144,7 @@ export default function ProjectForm({
       </fieldset>
 
       {kind === "회사" && (
-        <CategoryField value={category} onChange={setCategory} />
+        <CategoryField value={categoryId} onChange={setCategoryId} />
       )}
 
       <fieldset>

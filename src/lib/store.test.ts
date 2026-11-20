@@ -1,21 +1,15 @@
 import {
-  addCategory,
-  addStack,
-  createProject,
-  deleteProject,
-  getProject,
-  listCategories,
-  listProjects,
-  listStacks,
-  saveProjectRecords,
-  updateProject,
+  isValidProjectUrl,
+  mapProjectRow,
+  validateProjectInput,
   type ProjectInput,
+  type ProjectRow,
 } from "./store";
 
 const input: ProjectInput = {
   title: "테스트 프로젝트",
   kind: "회사",
-  category: "관리자",
+  categoryId: "cat-1",
   status: "진행예정",
   startDate: "2026-11-02",
   endDate: "2026-11-10",
@@ -26,101 +20,82 @@ const input: ProjectInput = {
   stacks: ["React"],
 };
 
-beforeEach(() => {
-  window.localStorage.clear();
-});
+const row: ProjectRow = {
+  id: "p1",
+  title: "테스트 프로젝트",
+  kind: "회사",
+  category_id: "cat-1",
+  status: "진행중",
+  start_date: "2026-11-02",
+  end_date: "2026-11-10",
+  summary: null,
+  role: null,
+  url: null,
+  memo: null,
+  categories: { name: "쇼핑몰" },
+  project_stacks: [
+    { stacks: { name: "TypeScript" } },
+    { stacks: { name: "React" } },
+    { stacks: null },
+  ],
+  troubles: [
+    { id: "t2", trouble: "두 번째", solution: "", position: 1 },
+    { id: "t1", trouble: "첫 번째", solution: "해결", position: 0 },
+  ],
+  learnings: [{ id: "l1", unknown: "", learned: "배운 점", position: 0 }],
+};
 
-test("처음이면 세 상태를 모두 가진 샘플 프로젝트를 만든다", async () => {
-  const projects = await listProjects();
-  const statuses = new Set(projects.map((project) => project.status));
-  expect(statuses).toEqual(new Set(["진행예정", "진행중", "완료"]));
-});
+test("DB row를 화면용 프로젝트로 바꾼다 (종류 이름, 스택, 기록 순서)", () => {
+  const project = mapProjectRow(row);
 
-test("스택과 종류는 대소문자만 다르면 중복 저장하지 않는다", async () => {
-  expect(await addStack("react")).toBe("React");
-  expect((await listStacks()).filter((s) => s.toLowerCase() === "react")).toHaveLength(1);
-
-  expect(await addCategory("관리자")).toBe("관리자");
-  expect((await listCategories()).filter((c) => c === "관리자")).toHaveLength(1);
-});
-
-test("프로젝트를 만들고, 수정하고, 삭제할 수 있다", async () => {
-  const created = await createProject(input);
-  expect(await getProject(created.id)).toMatchObject({
-    title: "테스트 프로젝트",
-    status: "진행예정",
-  });
-
-  const updated = await updateProject(created.id, { status: "완료" });
-  expect(updated.status).toBe("완료");
-  expect((await getProject(created.id))?.status).toBe("완료");
-
-  await deleteProject(created.id);
-  expect(await getProject(created.id)).toBeNull();
-});
-
-test("종료일이 시작일보다 빠르면 거부한다", async () => {
-  await expect(
-    createProject({ ...input, endDate: "2026-11-01" }),
-  ).rejects.toThrow("종료일은 시작일보다 빠를 수 없습니다.");
-});
-
-test("http(s)가 아닌 링크는 거부한다", async () => {
-  await expect(
-    createProject({ ...input, url: "example.com" }),
-  ).rejects.toThrow("링크는");
-});
-
-test("개인 프로젝트는 종류를 저장하지 않는다", async () => {
-  const created = await createProject({
-    ...input,
-    kind: "개인",
-    category: "관리자",
-  });
-  expect(created.category).toBe("");
-});
-
-test("기록은 저장되고, 예전 text 항목과 이상한 값도 읽히고, 프로젝트 수정에도 유지된다", async () => {
-  window.localStorage.setItem(
-    "project-admin:v2:projects",
-    JSON.stringify([
-      {
-        id: "legacy",
-        title: "예전 프로젝트",
-        kind: "회사",
-        category: "",
-        status: "진행중",
-        startDate: "2026-11-01",
-        endDate: "2026-11-02",
-        summary: "",
-        role: "",
-        url: "",
-        memo: "",
-        stacks: [],
-        troubles: [{ text: "예전 메모" }],
-        learnings: "배열이 아님",
-      },
-    ]),
-  );
-
-  const legacy = await getProject("legacy");
-  expect(legacy?.troubles).toEqual([
-    { id: "trouble-0", trouble: "예전 메모", solution: "" },
+  expect(project.categoryId).toBe("cat-1");
+  expect(project.category).toBe("쇼핑몰");
+  expect(project.stacks).toEqual(["React", "TypeScript"]);
+  expect(project.summary).toBe("");
+  expect(project.troubles).toEqual([
+    { id: "t1", trouble: "첫 번째", solution: "해결" },
+    { id: "t2", trouble: "두 번째", solution: "" },
   ]);
-  expect(legacy?.learnings).toEqual([]);
-
-  await saveProjectRecords("legacy", {
-    troubles: [{ id: "t1", trouble: "문제", solution: "해결" }],
-    learnings: [{ id: "l1", unknown: "", learned: "배운 점" }],
-  });
-  await updateProject("legacy", { title: "이름 변경" });
-
-  const updated = await getProject("legacy");
-  expect(updated?.title).toBe("이름 변경");
-  expect(updated?.troubles).toEqual([
-    { id: "t1", trouble: "문제", solution: "해결" },
-  ]);
-  expect(updated?.learnings).toEqual([
+  expect(project.learnings).toEqual([
     { id: "l1", unknown: "", learned: "배운 점" },
   ]);
+});
+
+test("목록 조회처럼 관계·기록이 없으면 빈 값으로 읽는다", () => {
+  const project = mapProjectRow({
+    ...row,
+    category_id: null,
+    categories: null,
+    project_stacks: null,
+    troubles: undefined,
+    learnings: undefined,
+  });
+
+  expect(project.categoryId).toBe("");
+  expect(project.category).toBe("");
+  expect(project.stacks).toEqual([]);
+  expect(project.troubles).toEqual([]);
+  expect(project.learnings).toEqual([]);
+});
+
+test("종료일이 시작일보다 빠르면 거부한다", () => {
+  expect(() =>
+    validateProjectInput({ ...input, endDate: "2026-11-01" }),
+  ).toThrow("종료일은 시작일보다 빠를 수 없습니다.");
+});
+
+test("이름이 비었거나 http(s)가 아닌 링크는 거부한다", () => {
+  expect(() => validateProjectInput({ ...input, title: "  " })).toThrow(
+    "프로젝트 이름을 입력해 주세요.",
+  );
+  expect(() => validateProjectInput({ ...input, url: "example.com" })).toThrow(
+    "링크는",
+  );
+});
+
+test("올바른 입력과 빈 링크는 통과한다", () => {
+  expect(() => validateProjectInput(input)).not.toThrow();
+  expect(() => validateProjectInput({ ...input, url: "" })).not.toThrow();
+  expect(isValidProjectUrl("https://example.com")).toBe(true);
+  expect(isValidProjectUrl("ftp://example.com")).toBe(false);
 });

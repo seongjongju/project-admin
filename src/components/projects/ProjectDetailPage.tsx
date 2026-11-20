@@ -19,6 +19,8 @@ import ProjectRecords from "./ProjectRecords";
 export default function ProjectDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const [project, setProject] = useState<Project | null | undefined>(undefined);
+  const [loadError, setLoadError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(false);
 
   useEffect(() => {
@@ -27,13 +29,18 @@ export default function ProjectDetailPage({ id }: { id: string }) {
       .then((data) => {
         if (active) setProject(data);
       })
-      .catch(() => {
-        if (active) setProject(null);
+      .catch((err) => {
+        if (!active) return;
+        setLoadError(
+          err instanceof Error
+            ? err.message
+            : "프로젝트를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
       });
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, reloadKey]);
 
   const listHref =
     project?.kind === "개인" ? "/personal" : "/company";
@@ -56,6 +63,27 @@ export default function ProjectDetailPage({ id }: { id: string }) {
   ) {
     if (!project) return;
     setProject(await saveProjectRecords(project.id, records));
+  }
+
+  if (loadError) {
+    return (
+      <div className="mx-auto flex w-full max-w-4xl flex-col items-start gap-4 py-16">
+        <p role="alert" className="text-ui text-danger">
+          {loadError}
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            setLoadError("");
+            setProject(undefined);
+            setReloadKey((key) => key + 1);
+          }}
+          className="h-11 rounded-[2px] border border-line px-4 text-ui font-medium text-ink hover:bg-accent-soft"
+        >
+          다시 시도
+        </button>
+      </div>
+    );
   }
 
   if (project === undefined) {

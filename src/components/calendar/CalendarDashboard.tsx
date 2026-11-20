@@ -35,7 +35,7 @@ function blankProject(date: string): ProjectDraft {
   return {
     title: "",
     kind: "",
-    category: "",
+    categoryId: "",
     status: "진행예정",
     startDate: date,
     endDate: date,
@@ -78,6 +78,17 @@ export default function CalendarDashboard() {
     setError("");
   }
 
+  async function retry() {
+    setError("");
+    setProjects(null);
+    try {
+      await reload();
+    } catch (err) {
+      setError(messageOf(err));
+      setProjects([]);
+    }
+  }
+
   async function handleSubmit(input: ProjectInput) {
     if (!dialog) return;
     if (dialog.mode === "edit") {
@@ -100,6 +111,10 @@ export default function CalendarDashboard() {
     startDate: string,
     endDate: string,
   ) {
+    const before = projects?.find((project) => project.id === id);
+    if (!before) return;
+
+    // 끄는 동안은 화면만 바꾸고, 손을 뗄 때(MonthGrid가 한 번만 호출) 저장한다.
     setProjects((previous) =>
       previous
         ? previous.map((project) =>
@@ -111,12 +126,21 @@ export default function CalendarDashboard() {
     try {
       await updateProject(id, { startDate, endDate });
     } catch (err) {
+      // 저장에 실패하면 원래 날짜로 되돌린다.
+      setProjects((previous) =>
+        previous
+          ? previous.map((project) =>
+              project.id === id
+                ? {
+                    ...project,
+                    startDate: before.startDate,
+                    endDate: before.endDate,
+                  }
+                : project,
+            )
+          : previous,
+      );
       setError(messageOf(err));
-      try {
-        setProjects(await listProjects());
-      } catch {
-        // 새로고침도 실패하면 현재 화면을 유지한다.
-      }
     }
   }
 
@@ -144,7 +168,14 @@ export default function CalendarDashboard() {
           role="alert"
           className="flex items-start justify-between gap-3 border-l-2 border-danger bg-surface py-2.5 pr-1 pl-3 text-ui text-danger"
         >
-          <p className="min-w-0 break-words">{error}</p>
+          <p className="min-w-0 flex-1 break-words">{error}</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="h-8 shrink-0 rounded-[2px] px-2 text-ui font-medium underline-offset-4 hover:underline"
+          >
+            다시 시도
+          </button>
           <button
             type="button"
             onClick={() => setError("")}

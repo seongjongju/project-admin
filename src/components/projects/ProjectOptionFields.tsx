@@ -6,6 +6,7 @@ import {
   addStack,
   listCategories,
   listStacks,
+  type Option,
 } from "@/lib/store";
 import { inputBase } from "./formStyles";
 
@@ -19,12 +20,13 @@ export function CategoryField({
   value,
   onChange,
 }: {
-  value: string;
-  onChange: (value: string) => void;
+  value: string; // 종류 id
+  onChange: (id: string) => void;
 }) {
-  const [options, setOptions] = useState<string[]>([]);
+  const [options, setOptions] = useState<Option[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     listCategories()
@@ -33,18 +35,22 @@ export function CategoryField({
   }, []);
 
   async function add() {
+    if (pending) return;
+    setPending(true);
     try {
-      const canonical = await addCategory(name);
+      const option = await addCategory(name);
       setOptions((previous) =>
-        previous.some((item) => item === canonical)
+        previous.some((item) => item.id === option.id)
           ? previous
-          : [...previous, canonical],
+          : [...previous, option].sort((a, b) => a.name.localeCompare(b.name)),
       );
-      onChange(canonical);
+      onChange(option.id);
       setName("");
       setError("");
     } catch (err) {
       setError(messageOf(err));
+    } finally {
+      setPending(false);
     }
   }
 
@@ -61,8 +67,8 @@ export function CategoryField({
       >
         <option value="">선택 안 함</option>
         {options.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={option.id} value={option.id}>
+            {option.name}
           </option>
         ))}
       </select>
@@ -89,7 +95,8 @@ export function CategoryField({
         <button
           type="button"
           onClick={add}
-          className="h-11 shrink-0 rounded-[2px] border border-line px-3 text-ui text-ink hover:bg-accent-soft"
+          disabled={pending}
+          className="h-11 shrink-0 rounded-[2px] border border-line px-3 text-ui text-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           추가
         </button>
@@ -113,6 +120,7 @@ export function StackField({
   const [options, setOptions] = useState<string[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     listStacks()
@@ -126,6 +134,8 @@ export function StackField({
   }
 
   async function add() {
+    if (pending) return;
+    setPending(true);
     try {
       const canonical = await addStack(name);
       setOptions((previous) =>
@@ -138,6 +148,8 @@ export function StackField({
       setError("");
     } catch (err) {
       setError(messageOf(err));
+    } finally {
+      setPending(false);
     }
   }
 
@@ -207,7 +219,8 @@ export function StackField({
         <button
           type="button"
           onClick={add}
-          className="h-11 shrink-0 rounded-[2px] border border-line px-3 text-ui text-ink hover:bg-accent-soft"
+          disabled={pending}
+          className="h-11 shrink-0 rounded-[2px] border border-line px-3 text-ui text-ink hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           추가
         </button>

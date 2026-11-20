@@ -21,6 +21,7 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
   const [tab, setTab] = useState<ProjectStatus>("진행예정");
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
@@ -29,17 +30,19 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
         if (!active) return;
         setProjects(data.filter((project) => project.kind === kind));
       })
-      .catch(() => {
+      .catch((err) => {
         if (!active) return;
         setError(
-          "프로젝트 목록을 불러오지 못했습니다. 페이지를 새로고침해 주세요.",
+          err instanceof Error
+            ? err.message
+            : "프로젝트 목록을 불러오지 못했습니다. 페이지를 새로고침해 주세요.",
         );
         setProjects([]);
       });
     return () => {
       active = false;
     };
-  }, [kind]);
+  }, [kind, reloadKey]);
 
   const visible = (projects ?? []).filter(
     (project) => project.status === tab,
@@ -57,12 +60,23 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
       </header>
 
       {error && (
-        <p
+        <div
           role="alert"
-          className="border-l-2 border-danger bg-surface py-2.5 pr-3 pl-3 text-ui text-danger"
+          className="flex flex-wrap items-center justify-between gap-2 border-l-2 border-danger bg-surface py-2.5 pr-3 pl-3 text-ui text-danger"
         >
-          {error}
-        </p>
+          <p className="min-w-0 flex-1 break-words">{error}</p>
+          <button
+            type="button"
+            onClick={() => {
+              setError("");
+              setProjects(null);
+              setReloadKey((key) => key + 1);
+            }}
+            className="h-8 shrink-0 rounded-[2px] px-2 text-ui font-medium underline-offset-4 hover:underline"
+          >
+            다시 시도
+          </button>
+        </div>
       )}
 
       <div>
