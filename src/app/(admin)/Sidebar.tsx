@@ -21,8 +21,8 @@ function LogoutButton({ onDone }: { onDone?: () => void }) {
       await createClient().auth.signOut();
     } finally {
       onDone?.();
-      router.replace("/login");
-      router.refresh();
+      window.location.href = "/";
+      setPending(false);
     }
   }
 
