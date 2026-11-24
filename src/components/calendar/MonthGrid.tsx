@@ -160,7 +160,7 @@ export default function MonthGrid({
           <span key={status} className="inline-flex items-center gap-1.5">
             <span
               aria-hidden="true"
-              className={`h-2 w-2 rounded-full ${STATUS_META[status].dot}`}
+              className={`h-2 w-2 rounded-[2px] ${STATUS_META[status].dot}`}
             />
             {status}
           </span>
@@ -283,7 +283,7 @@ export default function MonthGrid({
                           <span className="ml-0.5 flex min-w-0 items-center gap-1.5 rounded-[2px] py-1 pr-2 pl-1 transition-colors group-hover/bar:bg-accent-soft group-focus-visible/bar:bg-accent-soft">
                             <span
                               aria-hidden="true"
-                              className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
+                              className={`h-2 w-2 shrink-0 rounded-[2px] ${meta.dot}`}
                             />
                             <span className="truncate text-ui leading-none text-ink">
                               {label}
@@ -333,7 +333,7 @@ export default function MonthGrid({
                         >
                           <span
                             aria-hidden="true"
-                            className={`h-2 w-2 rounded-full ${
+                            className={`h-2 w-2 rounded-[2px] ${
                               STATUS_META[dayItems[0].status].dot
                             }`}
                           />

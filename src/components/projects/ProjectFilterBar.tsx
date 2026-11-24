@@ -1,29 +1,32 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { PROJECT_STATUSES, type ProjectStatus } from "@/lib/store";
+import type { ProjectStatus } from "@/lib/store";
 import { inputBase } from "./formStyles";
+
+/** 전체가 먼저, 그다음은 노출 순서(진행중 → 진행예정 → 완료). */
+const STATUS_CHIPS: (ProjectStatus | "")[] = ["", "진행중", "진행예정", "완료"];
 
 type ProjectFilterBarProps = {
   q: string;
-  statuses: ProjectStatus[];
+  status: ProjectStatus | "";
   from: string;
   to: string;
   total: number;
   onSearch: (value: string) => void;
-  onStatuses: (statuses: ProjectStatus[]) => void;
+  onStatus: (status: ProjectStatus | "") => void;
   onDate: (from: string, to: string) => void;
   onReset: () => void;
 };
 
 export default function ProjectFilterBar({
   q,
-  statuses,
+  status,
   from,
   to,
   total,
   onSearch,
-  onStatuses,
+  onStatus,
   onDate,
   onReset,
 }: ProjectFilterBarProps) {
@@ -41,16 +44,6 @@ export default function ProjectFilterBar({
   function schedule(value: string) {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => onSearch(value), 300);
-  }
-
-  function toggle(status: ProjectStatus) {
-    onStatuses(
-      statuses.includes(status)
-        ? statuses.filter((item) => item !== status)
-        : PROJECT_STATUSES.filter(
-            (item) => item === status || statuses.includes(item),
-          ),
-    );
   }
 
   return (
@@ -89,37 +82,31 @@ export default function ProjectFilterBar({
             상태
           </span>
           <div
-            role="group"
+            role="radiogroup"
             aria-labelledby="status-filter-label"
             className="mt-1.5 flex flex-wrap gap-2"
           >
-            <button
-              type="button"
-              aria-pressed={statuses.length === 0}
-              onClick={() => onStatuses([])}
-              className={`h-10 rounded-[2px] border px-3 text-ui ${
-                statuses.length === 0
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-line text-ink hover:bg-accent-soft"
-              }`}
-            >
-              전체
-            </button>
-            {PROJECT_STATUSES.map((status) => (
-              <button
-                key={status}
-                type="button"
-                aria-pressed={statuses.includes(status)}
-                onClick={() => toggle(status)}
-                className={`h-10 rounded-[2px] border px-3 text-ui ${
-                  statuses.includes(status)
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-line text-ink hover:bg-accent-soft"
-                }`}
-              >
-                {status}
-              </button>
-            ))}
+            {STATUS_CHIPS.map((option) => {
+              const selected = option === status;
+              return (
+                <button
+                  key={option || "all"}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => {
+                    if (!selected) onStatus(option);
+                  }}
+                  className={`h-10 rounded-[2px] border px-3 text-ui ${
+                    selected
+                      ? "border-accent bg-accent-soft text-accent"
+                      : "border-line text-ink hover:bg-accent-soft"
+                  }`}
+                >
+                  {option || "전체"}
+                </button>
+              );
+            })}
           </div>
         </div>
 

@@ -468,7 +468,7 @@ export default function ProjectTimeline({
               >
                 <span
                   aria-hidden="true"
-                  className={`h-2 w-2 shrink-0 rounded-full ${STATUS_META[status].dot}`}
+                  className={`h-2 w-2 shrink-0 rounded-[2px] ${STATUS_META[status].dot}`}
                 />
                 {status}
               </button>

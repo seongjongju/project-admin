@@ -342,7 +342,7 @@ export const PAGE_SIZE = 10;
 
 export type ListFilter = {
   q: string;
-  statuses: ProjectStatus[];
+  status: ProjectStatus | ""; // "" = 전체
   from: string; // YYYY-MM-DD, 등록일 시작
   to: string; // YYYY-MM-DD, 등록일 끝
   page: number;
@@ -350,21 +350,18 @@ export type ListFilter = {
 
 export type ProjectPage = { projects: Project[]; total: number };
 
-export function parseStatuses(values: string[]): ProjectStatus[] {
-  const found = new Set<ProjectStatus>();
-  for (const value of values) {
-    if (PROJECT_STATUSES.includes(value as ProjectStatus)) {
-      found.add(value as ProjectStatus);
-    }
-  }
-  return [...found];
+/** 주소의 status는 값 하나만. 알 수 없는 값은 전체로 본다. */
+export function parseStatus(value: string | null): ProjectStatus | "" {
+  return PROJECT_STATUSES.includes(value as ProjectStatus)
+    ? (value as ProjectStatus)
+    : "";
 }
 
 export function readListFilter(params: URLSearchParams): ListFilter {
   const page = Number(params.get("page"));
   return {
     q: params.get("q") ?? "",
-    statuses: parseStatuses(params.getAll("status")),
+    status: parseStatus(params.get("status")),
     from: params.get("from") ?? "",
     to: params.get("to") ?? "",
     page: Number.isInteger(page) && page > 0 ? page : 1,
@@ -374,7 +371,7 @@ export function readListFilter(params: URLSearchParams): ListFilter {
 export function listQueryString(filter: ListFilter) {
   const params = new URLSearchParams();
   if (filter.q.trim()) params.set("q", filter.q.trim());
-  for (const status of filter.statuses) params.append("status", status);
+  if (filter.status) params.set("status", filter.status);
   if (filter.from) params.set("from", filter.from);
   if (filter.to) params.set("to", filter.to);
   if (filter.page > 1) params.set("page", String(filter.page));
@@ -426,11 +423,13 @@ export async function queryProjects(
 
   const name = filter.q.trim();
   if (name) query.ilike("title", ilikePattern(name));
-  if (filter.statuses.length > 0) query.in("status", filter.statuses);
+  if (filter.status) query.eq("status", filter.status);
   const bounds = createdAtBounds(filter.from, filter.to);
   if (bounds.from) query.gte("created_at", bounds.from);
   if (bounds.to) query.lte("created_at", bounds.to);
 
+  // 상태를 하나 고르면 등록순, 전체면 상태순(진행중 → 진행예정 → 완료)을 먼저 적용한다.
+  if (!filter.status) query.order("status_rank", { ascending: true });
   const { data, error, count } = await query
     .order("created_at", { ascending: true })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);

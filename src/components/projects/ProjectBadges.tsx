@@ -3,13 +3,20 @@
 import { useEffect, useRef, useState } from "react";
 import { PROJECT_STATUSES, type ProjectKind, type ProjectStatus } from "@/lib/store";
 
+/** 색 값은 globals.css의 --color-status-* 토큰에만 있다. 여기는 이름 매핑뿐. */
 export const STATUS_META: Record<
   ProjectStatus,
   { bar: string; dot: string }
 > = {
-  진행예정: { bar: "bg-planned text-planned-ink", dot: "bg-planned-ink" },
-  진행중: { bar: "bg-accent-soft text-accent", dot: "bg-accent" },
-  완료: { bar: "bg-ink text-paper", dot: "bg-ink" },
+  진행예정: {
+    bar: "bg-status-planned text-status-planned-ink",
+    dot: "bg-status-planned",
+  },
+  진행중: {
+    bar: "bg-status-active text-status-active-ink",
+    dot: "bg-status-active",
+  },
+  완료: { bar: "bg-status-done text-status-done-ink", dot: "bg-status-done" },
 };
 
 export function StatusBadge({ status }: { status: ProjectStatus }) {

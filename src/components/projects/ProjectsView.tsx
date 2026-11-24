@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Modal from "@/components/ui/Modal";
@@ -8,7 +7,6 @@ import {
   createProject,
   deleteSchedule,
   listQueryString,
-  parseStatuses,
   queryProjects,
   readListFilter,
   totalPageCount,
@@ -21,11 +19,10 @@ import {
   type ProjectStatus,
   type ScheduleInput,
 } from "@/lib/store";
-import { KindBadge, StatusBadgeMenu } from "./ProjectBadges";
+import ProjectCard from "./ProjectCard";
 import ProjectFilterBar from "./ProjectFilterBar";
 import ProjectPagination from "./ProjectPagination";
 import ProjectForm, { type ProjectDraft } from "./ProjectForm";
-import ProjectTimeline from "./ProjectTimeline";
 
 type ProjectsViewProps = {
   kind: ProjectKind;
@@ -46,15 +43,6 @@ function blankProject(kind: ProjectKind): ProjectDraft {
   };
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-ui text-muted">{label}</dt>
-      <dd className="mt-0.5 min-w-0 text-ui break-words">{children}</dd>
-    </div>
-  );
-}
-
 function messageOf(error: unknown) {
   return error instanceof Error
     ? error.message
@@ -70,8 +58,7 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
     () => readListFilter(new URLSearchParams(queryString)),
     [queryString],
   );
-  const { q, statuses, from, to, page } = filter;
-  const statusKey = statuses.join(",");
+  const { q, status, from, to, page } = filter;
 
   const [result, setResult] = useState<{ projects: Project[]; total: number } | null>(
     null,
@@ -105,14 +92,7 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
       if (requestRef.current === request) setSlow(true);
     }, 150);
 
-    queryProjects({
-      kind,
-      q,
-      statuses: parseStatuses(statusKey ? statusKey.split(",") : []),
-      from,
-      to,
-      page,
-    })
+    queryProjects({ kind, q, status, from, to, page })
       .then((data) => {
         if (requestRef.current !== request) return;
         window.clearTimeout(timer);
@@ -133,7 +113,7 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
       });
 
     return () => window.clearTimeout(timer);
-  }, [kind, q, statusKey, from, to, page, reloadKey, setFilter]);
+  }, [kind, q, status, from, to, page, reloadKey, setFilter]);
 
   useEffect(() => {
     if (previousPage.current === page) return;
@@ -220,8 +200,9 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
         <div className="min-w-0">
           <h1 className="text-title font-semibold tracking-[-0.02em]">{title}</h1>
           <p className="mt-2 text-ui text-muted">
-            등록한 순서대로 보여줍니다. 날짜를 더블클릭해 일정을 추가하고,
-            상태 뱃지를 눌러 프로젝트 진행 상태를 바꿀 수 있습니다.
+            전체는 진행중 → 진행예정 → 완료 순으로, 상태를 고르면 등록 순으로
+            보여줍니다. 날짜를 더블클릭해 일정을 추가하고, 상태 뱃지를 눌러
+            프로젝트 진행 상태를 바꿀 수 있습니다.
           </p>
         </div>
         <button
@@ -235,12 +216,12 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
 
       <ProjectFilterBar
         q={q}
-        statuses={statuses}
+        status={status}
         from={from}
         to={to}
         total={result?.total ?? 0}
         onSearch={(value) => applyFilter({ q: value })}
-        onStatuses={(next) => applyFilter({ statuses: next })}
+        onStatus={(next) => applyFilter({ status: next })}
         onDate={(start, end) => applyFilter({ from: start, to: end })}
         onReset={() => {
           setError("");
@@ -281,84 +262,17 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
           조건에 맞는 프로젝트가 없습니다.
         </p>
       ) : (
-        <ul className="flex flex-col gap-6">
+        /* 필터·페이지가 바뀌면 카드를 다시 만들어 접힌 메모도 기본값으로 돌아간다. */
+        <ul key={`${q}|${status}|${from}|${to}|${page}`} className="flex flex-col gap-6">
           {result.projects.map((project) => (
-            <li key={project.id} className="border border-line bg-surface">
-              <ProjectTimeline
-                project={project}
-                onSaveSchedule={saveSchedule}
-                onDeleteSchedule={removeSchedule}
-              />
-              <div className="flex flex-col gap-4 px-3 py-4 sm:px-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={detailHref(project.id)}
-                    className="text-name font-medium break-words hover:text-accent"
-                  >
-                    {project.title}
-                  </Link>
-                  <StatusBadgeMenu
-                    status={project.status}
-                    onChange={(status) => changeStatus(project, status)}
-                  />
-                  <KindBadge kind={project.kind} />
-                  {project.kind === "회사" && project.category && (
-                    <span className="inline-flex items-center rounded-[2px] border border-line px-2 py-0.5 text-ui leading-tight text-muted">
-                      {project.category}
-                    </span>
-                  )}
-                </div>
-
-                <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
-                  <Field label="한 줄 소개">{project.summary || "—"}</Field>
-                  <Field label="내 역할">{project.role || "—"}</Field>
-                  <Field label="링크">
-                    {project.url ? (
-                      <a
-                        href={project.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="break-all text-accent underline-offset-4 hover:underline"
-                      >
-                        {project.url}
-                      </a>
-                    ) : (
-                      "—"
-                    )}
-                  </Field>
-                  <Field label="사용 스택">
-                    {project.stacks.length > 0 ? (
-                      <span className="flex flex-wrap gap-1.5">
-                        {project.stacks.map((stack) => (
-                          <span
-                            key={stack}
-                            className="rounded-[2px] bg-accent-soft px-2 py-0.5 text-ui text-accent"
-                          >
-                            {stack}
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </Field>
-                  <Field label="메모">
-                    {project.memo ? (
-                      <span className="whitespace-pre-wrap">{project.memo}</span>
-                    ) : (
-                      "—"
-                    )}
-                  </Field>
-                </dl>
-
-                <Link
-                  href={detailHref(project.id)}
-                  className="self-start text-ui text-accent underline-offset-4 hover:underline"
-                >
-                  상세에서 기록 보기 →
-                </Link>
-              </div>
-            </li>
+            <ProjectCard
+              key={project.id}
+              project={project}
+              detailHref={detailHref(project.id)}
+              onChangeStatus={(next) => changeStatus(project, next)}
+              onSaveSchedule={saveSchedule}
+              onDeleteSchedule={removeSchedule}
+            />
           ))}
         </ul>
       )}

@@ -22,6 +22,13 @@
   --color-saturday: #1d4ed8;
   --color-today: #fff0b3;
   --color-today-ink: #6b5400;
+  /* 상태 색의 유일한 값 정의. STATUS_META는 아래 토큰 이름만 매핑한다. */
+  --color-status-planned: #6b7280; /* gray-500, 흰 글자 대비 4.83:1 */
+  --color-status-planned-ink: #ffffff;
+  --color-status-active: #15803d; /* green-700, 흰 글자 대비 5.02:1 */
+  --color-status-active-ink: #ffffff;
+  --color-status-done: #dc2626; /* red-600, 흰 글자 대비 4.83:1 */
+  --color-status-done-ink: #ffffff;
   --text-ui: 14px;
   --text-ui--line-height: 1.65;
   --text-title: 22px;
