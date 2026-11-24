@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { formatRange } from "@/lib/date";
 import type { Project } from "@/lib/store";
-import { KindBadge, StatusBadge } from "./ProjectBadges";
+import { KindBadge } from "./ProjectBadges";
 
 type ProjectDetailProps = {
   project: Project;
-  onEdit: () => void;
-  onDelete: () => Promise<void>;
+  onEdit?: () => void;
+  onDelete?: () => Promise<void>;
   headingLevel?: "h1" | "h2";
   children?: React.ReactNode;
 };
@@ -30,6 +30,7 @@ export default function ProjectDetail({
   const Heading = headingLevel;
 
   async function handleDelete() {
+    if (!onDelete) return;
     setDeleting(true);
     setError("");
     try {
@@ -49,7 +50,6 @@ export default function ProjectDetail({
       <header className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <KindBadge kind={project.kind} />
-          <StatusBadge status={project.status} />
         </div>
         <Heading className="text-title font-semibold tracking-[-0.01em] break-words">
           {project.title}
@@ -145,10 +145,10 @@ export default function ProjectDetail({
         </p>
       )}
 
-      {confirming ? (
+      {onEdit && onDelete && (confirming ? (
         <div className="border-t border-line pt-4">
           <p className="text-ui text-ink">
-            이 프로젝트를 삭제할까요? 달력에서도 사라지고 되돌릴 수 없습니다.
+            이 프로젝트를 삭제할까요? 목록에서도 사라지고 되돌릴 수 없습니다.
           </p>
           <div className="mt-3 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
             <button
@@ -185,7 +185,7 @@ export default function ProjectDetail({
             수정
           </button>
         </div>
-      )}
+      ))}
     </div>
   );
 }

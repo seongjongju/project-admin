@@ -18,15 +18,26 @@ export type LearningItem = { id: string; unknown: string; learned: string };
 /** 스택/종류 선택지. 종류는 id로 주고받고 화면에는 name을 보여준다. */
 export type Option = { id: string; name: string };
 
+/** 프로젝트에 속한 개별 일정. 상태는 프로젝트 상태와 독립적이다. */
+export type ProjectSchedule = {
+  id: string;
+  projectId: string;
+  title: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  status: ProjectStatus;
+};
+
 export type Project = {
   id: string;
   title: string;
   kind: ProjectKind;
   categoryId: string; // "" = 종류 없음
   category: string; // 화면 표시용 종류 이름 (읽기 전용)
-  status: ProjectStatus;
-  startDate: string; // YYYY-MM-DD
-  endDate: string; // YYYY-MM-DD
+  status: ProjectStatus; // 프로젝트 상태. 일정 상태와 서로 영향을 주지 않는다.
+  startDate: string; // 일정에서 파생: 가장 이른 시작일. 일정 없으면 ""
+  endDate: string; // 일정에서 파생: 가장 늦은 끝일. 일정 없으면 ""
+  schedules: ProjectSchedule[];
   summary: string;
   role: string;
   url: string;
@@ -38,8 +49,28 @@ export type Project = {
 
 export type ProjectInput = Omit<
   Project,
-  "id" | "category" | "troubles" | "learnings"
+  | "id"
+  | "category"
+  | "startDate"
+  | "endDate"
+  | "schedules"
+  | "troubles"
+  | "learnings"
 >;
+
+export type ScheduleInput = Omit<ProjectSchedule, "id" | "projectId">;
+
+/** 달력은 프로젝트가 아니라 일정 단위로 읽는다. */
+export type ScheduleItem = ProjectSchedule & { projectTitle: string };
+
+export function flatScheduleItems(projects: Project[]): ScheduleItem[] {
+  return projects.flatMap((project) =>
+    project.schedules.map((schedule) => ({
+      ...schedule,
+      projectTitle: project.title,
+    })),
+  );
+}
 
 /** PostgREST는 관계를 객체 또는 배열로 돌려준다. 둘 다 받아 준다. */
 type Relation<T> = T | T[] | null | undefined;
@@ -58,12 +89,19 @@ export type ProjectRow = {
   memo: string | null;
   categories: Relation<{ name: string }>;
   project_stacks: Relation<{ stacks: Relation<{ name: string }> }>;
+  project_schedules?: {
+    id: string;
+    title: string;
+    start_date: string;
+    end_date: string;
+    status: string;
+  }[] | null;
   troubles?: { id: string; trouble: string; solution: string; position: number }[] | null;
   learnings?: { id: string; unknown: string; learned: string; position: number }[] | null;
 };
 
 const PROJECT_FIELDS =
-  "id, title, kind, category_id, status, start_date, end_date, summary, role, url, memo, categories ( name ), project_stacks ( stacks ( name ) )";
+  "id, title, kind, category_id, status, summary, role, url, memo, categories ( name ), project_stacks ( stacks ( name ) ), project_schedules ( id, title, start_date, end_date, status )";
 
 const NOT_FOUND =
   "프로젝트를 찾지 못했습니다. 새로고침 후 다시 시도해 주세요.";
@@ -99,6 +137,10 @@ function fail(error: DbError, fallback: string): never {
     ],
     ["TITLE_REQUIRED", "프로젝트 이름을 입력해 주세요."],
     ["OPTION_NAME_REQUIRED", "이름을 입력해 주세요."],
+    ["SCHEDULE_TITLE_REQUIRED", "일정 제목을 입력해 주세요."],
+    ["SCHEDULE_DATE_REQUIRED", "일정의 시작날짜와 끝날짜를 입력해 주세요."],
+    ["SCHEDULE_DATE_ORDER", "끝날짜는 시작날짜보다 빠를 수 없습니다."],
+    ["SCHEDULE_STATUS_INVALID", "일정 상태를 다시 선택해 주세요."],
   ];
   for (const [code, text] of known) {
     if (message.includes(code)) throw new Error(text);
@@ -129,6 +171,20 @@ export function mapProjectRow(row: ProjectRow): Project {
     })
     .sort((a, b) => a.localeCompare(b));
 
+  const schedules = (row.project_schedules ?? [])
+    .map<ProjectSchedule>((schedule) => ({
+      id: schedule.id,
+      projectId: row.id,
+      title: schedule.title,
+      startDate: schedule.start_date,
+      endDate: schedule.end_date,
+      status: schedule.status as ProjectStatus,
+    }))
+    .sort(
+      (a, b) =>
+        a.startDate.localeCompare(b.startDate) || a.id.localeCompare(b.id),
+    );
+
   return {
     id: row.id,
     title: row.title,
@@ -136,8 +192,16 @@ export function mapProjectRow(row: ProjectRow): Project {
     categoryId: row.category_id ?? "",
     category: one(row.categories)?.name ?? "",
     status: row.status as ProjectStatus,
-    startDate: row.start_date,
-    endDate: row.end_date,
+    // 프로젝트 기간은 일정에서만 계산한다. 일정이 없으면 빈 문자열.
+    startDate: schedules.reduce(
+      (min, item) => (!min || item.startDate < min ? item.startDate : min),
+      "",
+    ),
+    endDate: schedules.reduce(
+      (max, item) => (!max || item.endDate > max ? item.endDate : max),
+      "",
+    ),
+    schedules,
     summary: row.summary ?? "",
     role: row.role ?? "",
     url: row.url ?? "",
@@ -176,17 +240,24 @@ export function validateProjectInput(input: ProjectInput) {
     throw new Error("프로젝트 상태를 선택해 주세요.");
   }
 
-  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-  if (!datePattern.test(input.startDate) || !datePattern.test(input.endDate)) {
-    throw new Error("시작일과 종료일을 날짜 형식으로 입력해 주세요.");
-  }
-  if (input.endDate < input.startDate) {
-    throw new Error("종료일은 시작일보다 빠를 수 없습니다.");
-  }
   if (!isValidProjectUrl(input.url)) {
     throw new Error(
       "링크는 http:// 또는 https://로 시작하는 올바른 주소를 입력해 주세요.",
     );
+  }
+}
+
+export function validateScheduleInput(input: ScheduleInput) {
+  if (!input.title.trim()) throw new Error("일정 제목을 입력해 주세요.");
+  if (!PROJECT_STATUSES.includes(input.status)) {
+    throw new Error("일정 상태를 선택해 주세요.");
+  }
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+  if (!datePattern.test(input.startDate) || !datePattern.test(input.endDate)) {
+    throw new Error("시작날짜와 끝날짜를 날짜 형식으로 입력해 주세요.");
+  }
+  if (input.endDate < input.startDate) {
+    throw new Error("끝날짜는 시작날짜보다 빠를 수 없습니다.");
   }
 }
 
@@ -259,13 +330,118 @@ export async function listProjects(): Promise<Project[]> {
   const { data, error } = await client()
     .from("projects")
     .select(PROJECT_FIELDS)
-    .order("start_date", { ascending: false })
-    .order("title", { ascending: true });
+    .order("created_at", { ascending: true });
 
   if (error) {
     fail(error, "프로젝트 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
   return ((data ?? []) as unknown as ProjectRow[]).map(mapProjectRow);
+}
+
+export const PAGE_SIZE = 10;
+
+export type ListFilter = {
+  q: string;
+  statuses: ProjectStatus[];
+  from: string; // YYYY-MM-DD, 등록일 시작
+  to: string; // YYYY-MM-DD, 등록일 끝
+  page: number;
+};
+
+export type ProjectPage = { projects: Project[]; total: number };
+
+export function parseStatuses(values: string[]): ProjectStatus[] {
+  const found = new Set<ProjectStatus>();
+  for (const value of values) {
+    if (PROJECT_STATUSES.includes(value as ProjectStatus)) {
+      found.add(value as ProjectStatus);
+    }
+  }
+  return [...found];
+}
+
+export function readListFilter(params: URLSearchParams): ListFilter {
+  const page = Number(params.get("page"));
+  return {
+    q: params.get("q") ?? "",
+    statuses: parseStatuses(params.getAll("status")),
+    from: params.get("from") ?? "",
+    to: params.get("to") ?? "",
+    page: Number.isInteger(page) && page > 0 ? page : 1,
+  };
+}
+
+export function listQueryString(filter: ListFilter) {
+  const params = new URLSearchParams();
+  if (filter.q.trim()) params.set("q", filter.q.trim());
+  for (const status of filter.statuses) params.append("status", status);
+  if (filter.from) params.set("from", filter.from);
+  if (filter.to) params.set("to", filter.to);
+  if (filter.page > 1) params.set("page", String(filter.page));
+  return params.toString();
+}
+
+/** PostgREST ilike에서 %, _, \ 는 literally 뜻할 때 backslash로 감싼다. */
+export function ilikePattern(value: string) {
+  return `%${value.replace(/[\\%_]/g, (character) => `\\${character}`)}%`;
+}
+
+/** 한국 시간 하루의 시작·끝을 DB가 이해하는 timestamp로 바꾼다. */
+export function createdAtBounds(from: string, to: string) {
+  const key = /^\d{4}-\d{2}-\d{2}$/;
+  return {
+    from: key.test(from) ? `${from}T00:00:00+09:00` : "",
+    to: key.test(to) ? `${to}T23:59:59+09:00` : "",
+  };
+}
+
+export function totalPageCount(total: number) {
+  return Math.max(1, Math.ceil(total / PAGE_SIZE));
+}
+
+/** 첫·마지막 페이지와 현재 페이지 주변만 보여주고, 사이가 비면 … 로 줄인다. */
+export function pageWindow(current: number, totalPages: number): (number | "…")[] {
+  const candidates = [...new Set([1, totalPages, current - 1, current, current + 1])]
+    .filter((page) => page >= 1 && page <= totalPages)
+    .sort((a, b) => a - b);
+  const pages: (number | "…")[] = [];
+  let previous = 0;
+  for (const page of candidates) {
+    if (previous && page - previous > 1) pages.push("…");
+    pages.push(page);
+    previous = page;
+  }
+  return pages;
+}
+
+/** 목록 화면 전용 조회. 알림의 listProjects()는 전체 목록을 그대로 유지한다. */
+export async function queryProjects(
+  filter: ListFilter & { kind: ProjectKind },
+): Promise<ProjectPage> {
+  const page = Math.max(1, Math.floor(filter.page));
+  const query = client()
+    .from("projects")
+    .select(PROJECT_FIELDS, { count: "exact" })
+    .eq("kind", filter.kind);
+
+  const name = filter.q.trim();
+  if (name) query.ilike("title", ilikePattern(name));
+  if (filter.statuses.length > 0) query.in("status", filter.statuses);
+  const bounds = createdAtBounds(filter.from, filter.to);
+  if (bounds.from) query.gte("created_at", bounds.from);
+  if (bounds.to) query.lte("created_at", bounds.to);
+
+  const { data, error, count } = await query
+    .order("created_at", { ascending: true })
+    .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
+
+  if (error) {
+    fail(error, "프로젝트 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  return {
+    projects: ((data ?? []) as unknown as ProjectRow[]).map(mapProjectRow),
+    total: count ?? 0,
+  };
 }
 
 export async function getProject(id: string): Promise<Project | null> {
@@ -292,8 +468,6 @@ async function rpcSaveProject(id: string | null, input: ProjectInput) {
       kind: input.kind,
       categoryId: input.categoryId || null,
       status: input.status,
-      startDate: input.startDate,
-      endDate: input.endDate,
       summary: input.summary,
       role: input.role,
       url: input.url,
@@ -329,6 +503,49 @@ export async function updateProject(
   await rpcSaveProject(id, merged);
 
   const next = await getProject(id);
+  if (!next) throw new Error(NOT_FOUND);
+  return next;
+}
+
+/** 일정 추가·수정. 저장 후 프로젝트를 다시 읽어 파생 기간까지 갱신해 돌려준다. */
+export async function upsertSchedule(
+  projectId: string,
+  input: ScheduleInput & { id?: string },
+): Promise<Project> {
+  validateScheduleInput(input);
+
+  const { error } = await client().rpc("save_project_schedule", {
+    p_project_id: projectId,
+    p_payload: {
+      id: input.id ?? null,
+      title: input.title.trim(),
+      startDate: input.startDate,
+      endDate: input.endDate,
+      status: input.status,
+    },
+  });
+
+  if (error) {
+    fail(error, "일정을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  const next = await getProject(projectId);
+  if (!next) throw new Error(NOT_FOUND);
+  return next;
+}
+
+export async function deleteSchedule(
+  projectId: string,
+  scheduleId: string,
+): Promise<Project> {
+  const { error } = await client()
+    .from("project_schedules")
+    .delete()
+    .eq("id", scheduleId);
+
+  if (error) {
+    fail(error, "일정을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  const next = await getProject(projectId);
   if (!next) throw new Error(NOT_FOUND);
   return next;
 }

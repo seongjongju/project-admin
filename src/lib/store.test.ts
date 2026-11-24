@@ -1,7 +1,9 @@
 import {
+  flatScheduleItems,
   isValidProjectUrl,
   mapProjectRow,
   validateProjectInput,
+  validateScheduleInput,
   type ProjectInput,
   type ProjectRow,
 } from "./store";
@@ -11,8 +13,6 @@ const input: ProjectInput = {
   kind: "회사",
   categoryId: "cat-1",
   status: "진행예정",
-  startDate: "2026-11-02",
-  endDate: "2026-11-10",
   summary: "",
   role: "",
   url: "",
@@ -38,6 +38,22 @@ const row: ProjectRow = {
     { stacks: { name: "React" } },
     { stacks: null },
   ],
+  project_schedules: [
+    {
+      id: "s2",
+      title: "두 번째 일정",
+      start_date: "2026-11-10",
+      end_date: "2026-11-12",
+      status: "완료",
+    },
+    {
+      id: "s1",
+      title: "첫 번째 일정",
+      start_date: "2026-11-02",
+      end_date: "2026-11-08",
+      status: "진행중",
+    },
+  ],
   troubles: [
     { id: "t2", trouble: "두 번째", solution: "", position: 1 },
     { id: "t1", trouble: "첫 번째", solution: "해결", position: 0 },
@@ -61,6 +77,57 @@ test("DB row를 화면용 프로젝트로 바꾼다 (종류 이름, 스택, 기�
   ]);
 });
 
+test("프로젝트 기간은 일정의 최소 시작일·최대 끝날짜에서 계산한다", () => {
+  const project = mapProjectRow(row);
+
+  expect(project.schedules.map((item) => item.id)).toEqual(["s1", "s2"]);
+  expect(project.schedules[0]).toEqual({
+    id: "s1",
+    projectId: "p1",
+    title: "첫 번째 일정",
+    startDate: "2026-11-02",
+    endDate: "2026-11-08",
+    status: "진행중",
+  });
+  expect(project.startDate).toBe("2026-11-02");
+  expect(project.endDate).toBe("2026-11-12");
+});
+
+test("일정이 없으면 기간은 비어 있고 달력에도 일정이 없다", () => {
+  const project = mapProjectRow({
+    ...row,
+    project_schedules: null,
+  });
+
+  expect(project.schedules).toEqual([]);
+  expect(project.startDate).toBe("");
+  expect(project.endDate).toBe("");
+  expect(flatScheduleItems([project])).toEqual([]);
+});
+
+test("달력은 일정 단위로 펼치고 프로젝트 이름을 붙인다", () => {
+  expect(flatScheduleItems([mapProjectRow(row)])).toEqual([
+    {
+      id: "s1",
+      projectId: "p1",
+      projectTitle: "테스트 프로젝트",
+      title: "첫 번째 일정",
+      startDate: "2026-11-02",
+      endDate: "2026-11-08",
+      status: "진행중",
+    },
+    {
+      id: "s2",
+      projectId: "p1",
+      projectTitle: "테스트 프로젝트",
+      title: "두 번째 일정",
+      startDate: "2026-11-10",
+      endDate: "2026-11-12",
+      status: "완료",
+    },
+  ]);
+});
+
 test("목록 조회처럼 관계·기록이 없으면 빈 값으로 읽는다", () => {
   const project = mapProjectRow({
     ...row,
@@ -78,12 +145,6 @@ test("목록 조회처럼 관계·기록이 없으면 빈 값으로 읽는다", 
   expect(project.learnings).toEqual([]);
 });
 
-test("종료일이 시작일보다 빠르면 거부한다", () => {
-  expect(() =>
-    validateProjectInput({ ...input, endDate: "2026-11-01" }),
-  ).toThrow("종료일은 시작일보다 빠를 수 없습니다.");
-});
-
 test("이름이 비었거나 http(s)가 아닌 링크는 거부한다", () => {
   expect(() => validateProjectInput({ ...input, title: "  " })).toThrow(
     "프로젝트 이름을 입력해 주세요.",
@@ -98,4 +159,27 @@ test("올바른 입력과 빈 링크는 통과한다", () => {
   expect(() => validateProjectInput({ ...input, url: "" })).not.toThrow();
   expect(isValidProjectUrl("https://example.com")).toBe(true);
   expect(isValidProjectUrl("ftp://example.com")).toBe(false);
+});
+
+test("일정은 제목·날짜 형식·순서·상태를 검사한다", () => {
+  const schedule = {
+    title: "메인페이지 작업",
+    startDate: "2026-11-02",
+    endDate: "2026-11-10",
+    status: "진행예정" as const,
+  };
+
+  expect(() => validateScheduleInput(schedule)).not.toThrow();
+  expect(() => validateScheduleInput({ ...schedule, title: " " })).toThrow(
+    "일정 제목을 입력해 주세요.",
+  );
+  expect(() =>
+    validateScheduleInput({ ...schedule, endDate: "2026-11-01" }),
+  ).toThrow("끝날짜는 시작날짜보다 빠를 수 없습니다.");
+  expect(() =>
+    validateScheduleInput({ ...schedule, startDate: "11-02" }),
+  ).toThrow("날짜 형식");
+  expect(() =>
+    validateScheduleInput({ ...schedule, status: "모름" as never }),
+  ).toThrow("일정 상태를 선택해 주세요.");
 });

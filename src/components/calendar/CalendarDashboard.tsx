@@ -2,49 +2,27 @@
 
 import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
+import ProjectReminder from "@/components/ProjectReminder";
 import { StatusBadge } from "@/components/projects/ProjectBadges";
 import MonthlyProjects from "@/components/projects/MonthlyProjects";
 import ProjectDetail from "@/components/projects/ProjectDetail";
-import ProjectForm, {
-  type ProjectDraft,
-} from "@/components/projects/ProjectForm";
-import { formatDate } from "@/lib/date";
+import { formatDate, formatRange } from "@/lib/date";
 import {
-  createProject,
-  deleteProject,
+  flatScheduleItems,
   listProjects,
-  updateProject,
   type Project,
-  type ProjectInput,
+  type ScheduleItem,
 } from "@/lib/store";
 import MonthGrid from "./MonthGrid";
 
 type Dialog =
-  | { mode: "create"; date: string }
   | { mode: "day"; date: string }
-  | { mode: "detail"; project: Project }
-  | { mode: "edit"; project: Project };
+  | { mode: "detail"; project: Project; item: ScheduleItem | null };
 
 function messageOf(error: unknown) {
   return error instanceof Error
     ? error.message
     : "문제가 발생했습니다. 다시 시도해 주세요.";
-}
-
-function blankProject(date: string): ProjectDraft {
-  return {
-    title: "",
-    kind: "",
-    categoryId: "",
-    status: "진행예정",
-    startDate: date,
-    endDate: date,
-    summary: "",
-    role: "",
-    url: "",
-    memo: "",
-    stacks: [],
-  };
 }
 
 export default function CalendarDashboard() {
@@ -73,94 +51,40 @@ export default function CalendarDashboard() {
     setDialog(null);
   }
 
-  async function reload() {
-    setProjects(await listProjects());
-    setError("");
-  }
-
   async function retry() {
     setError("");
-    setProjects(null);
     try {
-      await reload();
+      setProjects(await listProjects());
     } catch (err) {
       setError(messageOf(err));
-      setProjects([]);
     }
   }
 
-  async function handleSubmit(input: ProjectInput) {
-    if (!dialog) return;
-    if (dialog.mode === "edit") {
-      await updateProject(dialog.project.id, input);
-    } else {
-      await createProject(input);
-    }
-    await reload();
-    setDialog(null);
-  }
-
-  async function handleDelete(id: string) {
-    await deleteProject(id);
-    await reload();
-    setDialog(null);
-  }
-
-  async function handleResize(
-    id: string,
-    startDate: string,
-    endDate: string,
-  ) {
-    const before = projects?.find((project) => project.id === id);
-    if (!before) return;
-
-    // 끄는 동안은 화면만 바꾸고, 손을 뗄 때(MonthGrid가 한 번만 호출) 저장한다.
-    setProjects((previous) =>
-      previous
-        ? previous.map((project) =>
-            project.id === id ? { ...project, startDate, endDate } : project,
-          )
-        : previous,
-    );
-
-    try {
-      await updateProject(id, { startDate, endDate });
-    } catch (err) {
-      // 저장에 실패하면 원래 날짜로 되돌린다.
-      setProjects((previous) =>
-        previous
-          ? previous.map((project) =>
-              project.id === id
-                ? {
-                    ...project,
-                    startDate: before.startDate,
-                    endDate: before.endDate,
-                  }
-                : project,
-            )
-          : previous,
-      );
-      setError(messageOf(err));
-    }
-  }
-
-  const dayProjects =
+  const items = flatScheduleItems(projects ?? []);
+  const dayItems =
     dialog?.mode === "day"
-      ? (projects ?? []).filter(
-          (project) =>
-            project.startDate <= dialog.date &&
-            project.endDate >= dialog.date,
+      ? items.filter(
+          (item) =>
+            item.startDate <= dialog.date && item.endDate >= dialog.date,
         )
       : [];
 
+  function openItem(item: ScheduleItem) {
+    const project = projects?.find((entry) => entry.id === item.projectId);
+    if (project) setDialog({ mode: "detail", project, item });
+  }
+
   return (
     <div className="flex flex-col gap-8">
-      <header>
-        <h1 className="text-title font-semibold tracking-[-0.02em]">홈</h1>
-        <p className="mt-2 text-ui text-muted">
-          날짜를 눌러 프로젝트를 추가하고, 막대 양 끝을 끌어 기간을
-          조절하세요.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-title font-semibold tracking-[-0.02em]">홈</h1>
+          <p className="mt-2 text-ui text-muted">
+            등록한 일정을 날짜별로 보여줍니다. 날짜나 일정 막대를 누르면 내용을
+            확인할 수 있어요.
+          </p>
+        </div>
+        <ProjectReminder />
       </header>
 
       {error && (
@@ -198,11 +122,9 @@ export default function CalendarDashboard() {
             </h2>
             <div className="mt-4">
               <MonthGrid
-                projects={projects}
-                onCreate={(date) => setDialog({ mode: "create", date })}
-                onSelect={(project) => setDialog({ mode: "detail", project })}
+                items={items}
+                onSelect={openItem}
                 onDayOpen={(date) => setDialog({ mode: "day", date })}
-                onResize={handleResize}
               />
             </div>
           </section>
@@ -214,44 +136,35 @@ export default function CalendarDashboard() {
         </p>
       )}
 
-      {dialog?.mode === "create" && (
-        <Modal
-          key={`create-${dialog.date}`}
-          title="새 프로젝트"
-          onClose={closeDialog}
-        >
-          <ProjectForm
-            initial={blankProject(dialog.date)}
-            submitLabel="추가"
-            onSubmit={handleSubmit}
-            onCancel={closeDialog}
-          />
-        </Modal>
-      )}
-
       {dialog?.mode === "day" && (
         <Modal
           key={`day-${dialog.date}`}
           title={`${formatDate(dialog.date)} 프로젝트`}
           onClose={closeDialog}
         >
-          {dayProjects.length === 0 ? (
-            <p className="text-ui text-muted">이 날의 프로젝트가 없습니다.</p>
+          {dayItems.length === 0 ? (
+            <p className="text-ui text-muted">이 날의 일정이 없습니다.</p>
           ) : (
             <ul className="divide-y divide-line">
-              {dayProjects.map((project) => (
-                <li key={project.id}>
+              {dayItems.map((item) => (
+                <li key={item.id}>
                   <button
                     type="button"
-                    onClick={() =>
-                      setDialog({ mode: "detail", project })
-                    }
+                    onClick={() => openItem(item)}
                     className="flex w-full flex-col items-start gap-1.5 py-3 text-left"
                   >
                     <span className="text-ui font-medium break-words">
-                      {project.title}
+                      {item.projectTitle}
                     </span>
-                    <StatusBadge status={project.status} />
+                    <span className="text-ui break-words text-muted">
+                      {item.title}
+                    </span>
+                    <span className="flex flex-wrap items-center gap-2">
+                      <StatusBadge status={item.status} />
+                      <span className="text-[12px] tabular-nums text-muted">
+                        {formatRange(item.startDate, item.endDate)}
+                      </span>
+                    </span>
                   </button>
                 </li>
               ))}
@@ -263,33 +176,14 @@ export default function CalendarDashboard() {
       {dialog?.mode === "detail" && (
         <Modal
           key={`detail-${dialog.project.id}`}
-          title="프로젝트 상세"
+          title={
+            dialog.item
+              ? `${dialog.item.projectTitle} · ${dialog.item.title}`
+              : "프로젝트 상세"
+          }
           onClose={closeDialog}
         >
-          <ProjectDetail
-            project={dialog.project}
-            onEdit={() =>
-              setDialog({ mode: "edit", project: dialog.project })
-            }
-            onDelete={() => handleDelete(dialog.project.id)}
-          />
-        </Modal>
-      )}
-
-      {dialog?.mode === "edit" && (
-        <Modal
-          key={`edit-${dialog.project.id}`}
-          title="프로젝트 수정"
-          onClose={closeDialog}
-        >
-          <ProjectForm
-            initial={dialog.project}
-            submitLabel="저장"
-            onSubmit={handleSubmit}
-            onCancel={() =>
-              setDialog({ mode: "detail", project: dialog.project })
-            }
-          />
+          <ProjectDetail project={dialog.project} />
         </Modal>
       )}
     </div>

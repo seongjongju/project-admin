@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import {
@@ -18,6 +18,7 @@ import ProjectRecords from "./ProjectRecords";
 
 export default function ProjectDetailPage({ id }: { id: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [project, setProject] = useState<Project | null | undefined>(undefined);
   const [loadError, setLoadError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -42,8 +43,11 @@ export default function ProjectDetailPage({ id }: { id: string }) {
     };
   }, [id, reloadKey]);
 
-  const listHref =
-    project?.kind === "개인" ? "/personal" : "/company";
+  // 목록에서 넘어온 필터·페이지를 그대로 들고 돌아간다.
+  const listQuery = searchParams.toString();
+  const listHref = `${project?.kind === "개인" ? "/personal" : "/company"}${
+    listQuery ? `?${listQuery}` : ""
+  }`;
 
   async function handleEdit(input: ProjectInput) {
     if (!project) return;

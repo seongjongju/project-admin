@@ -44,6 +44,10 @@ create unique index if not exists categories_user_name_key
 --    on delete set null: 종류를 삭제하면 프로젝트의 category_id 는 null 이 된다.
 --    계정 삭제 시 종류가 cascade 로 지워져도 프로젝트 삭제가 막히지 않는다.
 --    깨진 id 는 남지 않고 "종류 선택 안 함" 상태가 된다.
+--    status 는 진행예정/진행중/완료 중 하나. 값을 넣지 않으면 진행예정이 기본값.
+--    start_date / end_date 는 예전 열로, 앱에서는 쓰지 않는다(null 허용).
+--    프로젝트 기간은 project_schedules 에서 계산한다.
+--    이미 실행된 DB에서 열을 추가·보정할 때는 migration_2026-11-20_status_dates.sql 을 쓴다.
 -- ---------------------------------------------------------------------------
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
@@ -51,9 +55,9 @@ create table if not exists public.projects (
   title text not null,
   kind text not null,
   category_id uuid references public.categories (id) on delete set null,
-  status text not null,
-  start_date date not null,
-  end_date date not null,
+  status text not null default '진행예정',
+  start_date date,
+  end_date date,
   summary text not null default '',
   role text not null default '',
   url text not null default '',
@@ -62,13 +66,34 @@ create table if not exists public.projects (
   constraint projects_title_not_blank check (btrim(title) <> ''),
   constraint projects_kind_check check (kind in ('회사', '개인')),
   constraint projects_status_check check (status in ('진행예정', '진행중', '완료')),
-  constraint projects_date_order check (end_date >= start_date),
+  constraint projects_date_order check (
+    start_date is null or end_date is null or end_date >= start_date
+  ),
   -- 종류는 회사 프로젝트에만 있을 수 있다.
   constraint projects_category_company_only check (kind = '회사' or category_id is null)
 );
 
 create index if not exists projects_user_start_idx
   on public.projects (user_id, start_date desc);
+
+-- 2-1. 프로젝트 일정. 한 프로젝트에 여러 개. 프로젝트 상태와 별개의 status 를 갖는다.
+--      user_id 를 두지 않고 부모 프로젝트의 소유자로 RLS 를 건다.
+create table if not exists public.project_schedules (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  title text not null,
+  start_date date not null,
+  end_date date not null,
+  status text not null default '진행예정',
+  created_at timestamptz not null default now(),
+  constraint project_schedules_title_not_blank check (btrim(title) <> ''),
+  constraint project_schedules_status_check
+    check (status in ('진행예정', '진행중', '완료')),
+  constraint project_schedules_date_order check (end_date >= start_date)
+);
+
+create index if not exists project_schedules_project_start_idx
+  on public.project_schedules (project_id, start_date);
 
 -- ---------------------------------------------------------------------------
 -- 3. 자식 테이블: 스택 연결 / 트러블슈팅 / 배운점
@@ -109,6 +134,7 @@ create index if not exists learnings_project_position_idx
 --    delete 정책을 만들지 않은 동작(스택/종류/자식 수정)은 API로 할 수 없다.
 -- ---------------------------------------------------------------------------
 alter table public.projects enable row level security;
+alter table public.project_schedules enable row level security;
 alter table public.stacks enable row level security;
 alter table public.categories enable row level security;
 alter table public.project_stacks enable row level security;
@@ -152,6 +178,50 @@ create policy projects_update on public.projects
 drop policy if exists projects_delete on public.projects;
 create policy projects_delete on public.projects
   for delete to authenticated using (user_id = auth.uid());
+
+-- project_schedules: 부모가 내 것인지로 확인 (select/insert/update/delete 모두)
+drop policy if exists project_schedules_select on public.project_schedules;
+create policy project_schedules_select on public.project_schedules
+  for select to authenticated using (
+    exists (
+      select 1 from public.projects p
+      where p.id = project_id and p.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists project_schedules_insert on public.project_schedules;
+create policy project_schedules_insert on public.project_schedules
+  for insert to authenticated with check (
+    exists (
+      select 1 from public.projects p
+      where p.id = project_id and p.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists project_schedules_update on public.project_schedules;
+create policy project_schedules_update on public.project_schedules
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.projects p
+      where p.id = project_id and p.user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.projects p
+      where p.id = project_id and p.user_id = auth.uid()
+    )
+  );
+
+drop policy if exists project_schedules_delete on public.project_schedules;
+create policy project_schedules_delete on public.project_schedules
+  for delete to authenticated using (
+    exists (
+      select 1 from public.projects p
+      where p.id = project_id and p.user_id = auth.uid()
+    )
+  );
 
 -- stacks / categories (조회, 추가만. 삭제 UI는 아직 없어 delete 정책을 두지 않는다)
 drop policy if exists stacks_select on public.stacks;
@@ -392,6 +462,63 @@ begin
 end;
 $$;
 
+-- 5-2-1. 프로젝트 일정 저장(추가/수정). 날짜·상태를 검사하고 소유자도 확인한다.
+create or replace function public.save_project_schedule(p_project_id uuid, p_payload jsonb)
+returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+#variable_conflict use_column
+declare
+  v_id uuid := nullif(p_payload->>'id', '')::uuid;
+  v_title text := btrim(coalesce(p_payload->>'title', ''));
+  v_start date := (p_payload->>'startDate')::date;
+  v_end date := (p_payload->>'endDate')::date;
+  v_status text := coalesce(p_payload->>'status', '진행예정');
+  v_result uuid;
+begin
+  if not exists (
+    select 1 from projects p
+    where p.id = p_project_id and p.user_id = auth.uid()
+  ) then
+    raise exception 'PROJECT_NOT_FOUND';
+  end if;
+  if v_title = '' then
+    raise exception 'SCHEDULE_TITLE_REQUIRED';
+  end if;
+  if v_start is null or v_end is null then
+    raise exception 'SCHEDULE_DATE_REQUIRED';
+  end if;
+  if v_end < v_start then
+    raise exception 'SCHEDULE_DATE_ORDER';
+  end if;
+  if v_status not in ('진행예정', '진행중', '완료') then
+    raise exception 'SCHEDULE_STATUS_INVALID';
+  end if;
+
+  if v_id is null then
+    insert into project_schedules (project_id, title, start_date, end_date, status)
+    values (p_project_id, v_title, v_start, v_end, v_status)
+    returning id into v_result;
+  else
+    update project_schedules set
+      title = v_title,
+      start_date = v_start,
+      end_date = v_end,
+      status = v_status
+    where id = v_id and project_id = p_project_id
+    returning id into v_result;
+
+    if v_result is null then
+      raise exception 'SCHEDULE_NOT_FOUND';
+    end if;
+  end if;
+
+  return v_result;
+end;
+$$;
+
 -- 5-3. 기록(트러블슈팅 / 배운점) 저장. 순서(position)를 유지하며 전부 다시 넣는다.
 create or replace function public.save_project_records(
   p_project_id uuid,
@@ -443,16 +570,19 @@ $$;
 -- 로그인한 사용자만 RPC를 실행할 수 있게 한다 (익명 키만으로는 실행 불가).
 revoke all on function public.add_option(text, text) from public;
 revoke all on function public.save_project(uuid, jsonb) from public;
+revoke all on function public.save_project_schedule(uuid, jsonb) from public;
 revoke all on function public.save_project_records(uuid, jsonb, jsonb) from public;
 
 grant execute on function public.add_option(text, text) to authenticated;
 grant execute on function public.save_project(uuid, jsonb) to authenticated;
+grant execute on function public.save_project_schedule(uuid, jsonb) to authenticated;
 grant execute on function public.save_project_records(uuid, jsonb, jsonb) to authenticated;
 
 
 -- 6. 테이블 권한 (Supabase 새 기본 정책: 명시적으로 허용해야 API에서 보인다)
 -- RLS 정책과 같은 범위로 최소 권한만 준다. anon(로그인 전)에게는 주지 않는다.
 grant select, insert, update, delete on public.projects to authenticated;
+grant select, insert, update, delete on public.project_schedules to authenticated;
 grant select, insert on public.stacks to authenticated;
 grant select, insert on public.categories to authenticated;
 grant select, insert, delete on public.project_stacks to authenticated;

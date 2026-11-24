@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  addDays,
   diffDays,
   formatDate,
   formatRange,
@@ -11,33 +10,18 @@ import {
   toDateKey,
   type CalendarWeek,
 } from "@/lib/date";
-import {
-  PROJECT_STATUSES,
-  type Project,
-} from "@/lib/store";
+import { PROJECT_STATUSES, type ScheduleItem } from "@/lib/store";
 import { getHolidayName } from "@/lib/holidays";
 import { STATUS_META } from "@/components/projects/ProjectBadges";
 
 type MonthGridProps = {
-  projects: Project[];
-  onCreate: (date: string) => void;
-  onSelect: (project: Project) => void;
+  items: ScheduleItem[];
+  onSelect: (item: ScheduleItem) => void;
   onDayOpen: (date: string) => void;
-  onResize: (id: string, startDate: string, endDate: string) => void;
-};
-
-type DragState = {
-  original: Project;
-  edge: "start" | "end";
-  originX: number;
-  columnWidth: number;
-  startDate: string;
-  endDate: string;
-  moved: boolean;
 };
 
 type Segment = {
-  project: Project;
+  item: ScheduleItem;
   startCol: number;
   endCol: number;
   lane: number;
@@ -49,26 +33,23 @@ const LANE_TOP = 4;
 const LANE_PITCH = 32;
 const BAND_HEIGHT = 28;
 
-/** 한 주 안에서 겹치는 프로젝트가 서로 다른 줄(lane)에 오도록 배치한다. */
-function layoutWeek(week: CalendarWeek, projects: Project[]): Segment[] {
+/** 한 주 안에서 겹치는 일정이 서로 다른 줄(lane)에 오도록 배치한다. */
+function layoutWeek(week: CalendarWeek, items: ScheduleItem[]): Segment[] {
   const weekStart = week.days[0].key;
   const weekEnd = week.days[6].key;
   const lanes: [number, number][][] = [];
 
-  return projects
-    .filter(
-      (project) =>
-        project.startDate <= weekEnd && project.endDate >= weekStart,
-    )
+  return items
+    .filter((item) => item.startDate <= weekEnd && item.endDate >= weekStart)
     .sort(
       (a, b) =>
         a.startDate.localeCompare(b.startDate) ||
         b.endDate.localeCompare(a.endDate) ||
         a.id.localeCompare(b.id),
     )
-    .map((project) => {
-      const startCol = Math.max(0, diffDays(weekStart, project.startDate));
-      const endCol = Math.min(6, diffDays(weekStart, project.endDate));
+    .map((item) => {
+      const startCol = Math.max(0, diffDays(weekStart, item.startDate));
+      const endCol = Math.min(6, diffDays(weekStart, item.endDate));
 
       let lane = lanes.findIndex((ranges) =>
         ranges.every(([start, end]) => endCol < start || startCol > end),
@@ -80,33 +61,24 @@ function layoutWeek(week: CalendarWeek, projects: Project[]): Segment[] {
       lanes[lane].push([startCol, endCol]);
 
       return {
-        project,
+        item,
         startCol,
         endCol,
         lane,
-        continueLeft: project.startDate < weekStart,
-        continueRight: project.endDate > weekEnd,
+        continueLeft: item.startDate < weekStart,
+        continueRight: item.endDate > weekEnd,
       };
     });
 }
 
 export default function MonthGrid({
-  projects,
-  onCreate,
+  items,
   onSelect,
   onDayOpen,
-  onResize,
 }: MonthGridProps) {
   const [cursor, setCursor] = useState(() => startOfMonth(new Date()));
   const [gridWidth, setGridWidth] = useState(0);
   const gridRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<DragState | null>(null);
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const suppressClickUntil = useRef(0);
-  const onResizeRef = useRef(onResize);
-  useEffect(() => {
-    onResizeRef.current = onResize;
-  }, [onResize]);
 
   useEffect(() => {
     const element = gridRef.current;
@@ -118,119 +90,14 @@ export default function MonthGrid({
     return () => observer.disconnect();
   }, []);
 
-  const dragging = drag !== null;
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const weeks = getMonthWeeks(year, month);
   const today = toDateKey(new Date());
   const cellSize = gridWidth / 7;
-  const displayProjects = drag
-    ? projects.map((project) =>
-        project.id === drag.original.id
-          ? {
-              ...project,
-              startDate: drag.startDate,
-              endDate: drag.endDate,
-            }
-          : project,
-      )
-    : projects;
-
-  useEffect(() => {
-    if (!dragging) return;
-
-    function handleMove(event: PointerEvent) {
-      const current = dragRef.current;
-      if (!current) return;
-
-      const days = Math.round(
-        (event.clientX - current.originX) / current.columnWidth,
-      );
-      let startDate = current.original.startDate;
-      let endDate = current.original.endDate;
-
-      if (current.edge === "start") {
-        const movedStart = addDays(startDate, days);
-        startDate = movedStart > endDate ? endDate : movedStart;
-      } else {
-        const movedEnd = addDays(endDate, days);
-        endDate = movedEnd < startDate ? startDate : movedEnd;
-      }
-
-      const next: DragState = {
-        ...current,
-        startDate,
-        endDate,
-        moved:
-          startDate !== current.original.startDate ||
-          endDate !== current.original.endDate,
-      };
-      dragRef.current = next;
-      setDrag(next);
-    }
-
-    function finish(save: boolean) {
-      const latest = dragRef.current;
-      dragRef.current = null;
-      setDrag(null);
-      if (!latest || !latest.moved) return;
-
-      suppressClickUntil.current = Date.now() + 300;
-      if (save) {
-        onResizeRef.current(
-          latest.original.id,
-          latest.startDate,
-          latest.endDate,
-        );
-      }
-    }
-
-    const handleUp = () => finish(true);
-    const handleCancel = () => finish(false);
-
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-    window.addEventListener("pointercancel", handleCancel);
-    return () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-      window.removeEventListener("pointercancel", handleCancel);
-    };
-  }, [dragging]);
-
-  function startResize(
-    event: React.PointerEvent<HTMLSpanElement>,
-    project: Project,
-    edge: "start" | "end",
-  ) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const width = gridWidth || gridRef.current?.getBoundingClientRect().width;
-    if (!width) return;
-
-    const next: DragState = {
-      original: project,
-      edge,
-      originX: event.clientX,
-      columnWidth: width / 7,
-      startDate: project.startDate,
-      endDate: project.endDate,
-      moved: false,
-    };
-    dragRef.current = next;
-    setDrag(next);
-  }
 
   return (
-    <div
-      onClickCapture={(event) => {
-        if (Date.now() < suppressClickUntil.current) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      }}
-    >
+    <div>
       <div className="flex flex-wrap items-end justify-between gap-3 pb-4">
         <h3
           aria-live="polite"
@@ -319,7 +186,7 @@ export default function MonthGrid({
 
       <div ref={gridRef}>
         {weeks.map((week) => {
-          const segments = layoutWeek(week, displayProjects);
+          const segments = layoutWeek(week, items);
           const laneCount = Math.max(
             1,
             ...segments.map((segment) => segment.lane + 1),
@@ -348,8 +215,8 @@ export default function MonthGrid({
                     >
                       <button
                         type="button"
-                        onClick={() => onCreate(day.key)}
-                        aria-label={`${formatDate(day.key)}${holiday ? ` ${holiday}` : ""} 프로젝트 추가`}
+                        onClick={() => onDayOpen(day.key)}
+                        aria-label={`${formatDate(day.key)}${holiday ? ` ${holiday}` : ""} 프로젝트 보기`}
                         className="flex h-full w-full items-center justify-center gap-2 rounded-[2px] px-1 hover:bg-accent-soft/40"
                       >
                         <span
@@ -383,17 +250,14 @@ export default function MonthGrid({
                 }}
               >
                 {segments.map((segment) => {
-                  const { project, startCol, endCol, lane } = segment;
-                  const single = project.startDate === project.endDate;
-                  const meta = STATUS_META[project.status];
-                  const handleClass =
-                    "absolute inset-y-0 z-10 w-3 touch-none cursor-ew-resize";
-                  const gripClass =
-                    "pointer-events-none absolute top-1/2 h-2.5 w-0.5 -translate-y-1/2 rounded-full bg-current opacity-0 group-hover/bar:opacity-40 group-focus-visible/bar:opacity-40";
+                  const { item, startCol, endCol, lane } = segment;
+                  const single = item.startDate === item.endDate;
+                  const meta = STATUS_META[item.status];
+                  const label = `${item.projectTitle} · ${item.title}`;
 
                   return (
                     <div
-                      key={project.id}
+                      key={item.id}
                       className="pointer-events-none absolute"
                       style={{
                         left: `${(startCol / 7) * 100}%`,
@@ -404,9 +268,9 @@ export default function MonthGrid({
                     >
                       <button
                         type="button"
-                        onClick={() => onSelect(project)}
-                        title={`${project.title} (${formatRange(project.startDate, project.endDate)})`}
-                        aria-label={`${project.title}, ${formatRange(project.startDate, project.endDate)}`}
+                        onClick={() => onSelect(item)}
+                        title={`${label} (${formatRange(item.startDate, item.endDate)})`}
+                        aria-label={`${label}, ${formatRange(item.startDate, item.endDate)}`}
                         className={`group/bar pointer-events-auto relative flex h-full items-center overflow-hidden text-left select-none ${
                           single
                             ? "w-fit max-w-full rounded-[2px]"
@@ -415,18 +279,6 @@ export default function MonthGrid({
                               } ${segment.continueRight ? "rounded-r-none" : ""}`
                         }`}
                       >
-                        {!segment.continueLeft && (
-                          <span
-                            aria-hidden="true"
-                            onPointerDown={(event) =>
-                              startResize(event, project, "start")
-                            }
-                            className={`${handleClass} left-0`}
-                          >
-                            <span className={`${gripClass} left-0.5`} />
-                          </span>
-                        )}
-
                         {single ? (
                           <span className="ml-0.5 flex min-w-0 items-center gap-1.5 rounded-[2px] py-1 pr-2 pl-1 transition-colors group-hover/bar:bg-accent-soft group-focus-visible/bar:bg-accent-soft">
                             <span
@@ -434,7 +286,7 @@ export default function MonthGrid({
                               className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`}
                             />
                             <span className="truncate text-ui leading-none text-ink">
-                              {project.title}
+                              {label}
                             </span>
                           </span>
                         ) : (
@@ -450,21 +302,9 @@ export default function MonthGrid({
                                 segment.continueLeft ? "pl-2" : "pl-3"
                               }`}
                             >
-                              {project.title}
+                              {label}
                             </span>
                           </>
-                        )}
-
-                        {!segment.continueRight && (
-                          <span
-                            aria-hidden="true"
-                            onPointerDown={(event) =>
-                              startResize(event, project, "end")
-                            }
-                            className={`${handleClass} right-0`}
-                          >
-                            <span className={`${gripClass} right-0.5`} />
-                          </span>
                         )}
                       </button>
                     </div>
@@ -474,10 +314,9 @@ export default function MonthGrid({
 
               <div className="grid grid-cols-7 sm:hidden">
                 {week.days.map((day) => {
-                  const dayProjects = displayProjects.filter(
-                    (project) =>
-                      project.startDate <= day.key &&
-                      project.endDate >= day.key,
+                  const dayItems = items.filter(
+                    (item) =>
+                      item.startDate <= day.key && item.endDate >= day.key,
                   );
 
                   return (
@@ -485,28 +324,28 @@ export default function MonthGrid({
                       key={day.key}
                       className="flex h-4 items-center justify-center"
                     >
-                      {dayProjects.length === 1 ? (
+                      {dayItems.length === 1 ? (
                         <button
                           type="button"
-                          onClick={() => onSelect(dayProjects[0])}
-                          aria-label={`${dayProjects[0].title} 상세 보기`}
+                          onClick={() => onSelect(dayItems[0])}
+                          aria-label={`${dayItems[0].projectTitle} · ${dayItems[0].title} 상세 보기`}
                           className="flex h-full w-full items-center justify-center"
                         >
                           <span
                             aria-hidden="true"
                             className={`h-2 w-2 rounded-full ${
-                              STATUS_META[dayProjects[0].status].dot
+                              STATUS_META[dayItems[0].status].dot
                             }`}
                           />
                         </button>
-                      ) : dayProjects.length > 1 ? (
+                      ) : dayItems.length > 1 ? (
                         <button
                           type="button"
                           onClick={() => onDayOpen(day.key)}
-                          aria-label={`${formatDate(day.key)} 프로젝트 ${dayProjects.length}개 보기`}
+                          aria-label={`${formatDate(day.key)} 일정 ${dayItems.length}개 보기`}
                           className="flex h-full w-full items-center justify-center text-ui leading-none font-medium text-accent"
                         >
-                          {dayProjects.length}
+                          {dayItems.length}
                         </button>
                       ) : null}
                     </div>

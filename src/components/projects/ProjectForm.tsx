@@ -3,13 +3,10 @@
 import { useState } from "react";
 import {
   PROJECT_KINDS,
-  PROJECT_STATUSES,
   isValidProjectUrl,
   type ProjectInput,
   type ProjectKind,
-  type ProjectStatus,
 } from "@/lib/store";
-import { STATUS_META } from "./ProjectBadges";
 import { CategoryField, StackField } from "./ProjectOptionFields";
 import { inputBase } from "./formStyles";
 
@@ -33,9 +30,6 @@ export default function ProjectForm({
   const [title, setTitle] = useState(initial.title);
   const [kind, setKind] = useState<ProjectKind | "">(initial.kind);
   const [categoryId, setCategoryId] = useState(initial.categoryId);
-  const [status, setStatus] = useState<ProjectStatus>(initial.status);
-  const [startDate, setStartDate] = useState(initial.startDate);
-  const [endDate, setEndDate] = useState(initial.endDate);
   const [summary, setSummary] = useState(initial.summary);
   const [role, setRole] = useState(initial.role);
   const [url, setUrl] = useState(initial.url);
@@ -59,10 +53,6 @@ export default function ProjectForm({
       setError("프로젝트 유형을 선택해 주세요.");
       return;
     }
-    if (endDate < startDate) {
-      setError("종료일은 시작일보다 빠를 수 없습니다.");
-      return;
-    }
     if (!isValidProjectUrl(url)) {
       setError(
         "링크는 http:// 또는 https://로 시작하는 올바른 주소를 입력해 주세요.",
@@ -77,9 +67,7 @@ export default function ProjectForm({
         title: title.trim(),
         kind,
         categoryId: kind === "회사" ? categoryId : "",
-        status,
-        startDate,
-        endDate,
+        status: initial.status,
         summary: summary.trim(),
         role: role.trim(),
         url: url.trim(),
@@ -146,64 +134,6 @@ export default function ProjectForm({
       {kind === "회사" && (
         <CategoryField value={categoryId} onChange={setCategoryId} />
       )}
-
-      <fieldset>
-        <legend className="text-ui font-medium">상태</legend>
-        <div className="mt-1.5 flex flex-wrap gap-2">
-          {PROJECT_STATUSES.map((option) => (
-            <label
-              key={option}
-              className={`flex h-10 items-center gap-2 rounded-[2px] border px-3 text-ui ${
-                status === option
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-line text-ink"
-              }`}
-            >
-              <input
-                type="radio"
-                name="project-status"
-                value={option}
-                checked={status === option}
-                onChange={() => setStatus(option)}
-                className="h-4 w-4 accent-accent"
-              />
-              <span
-                aria-hidden="true"
-                className={`h-2 w-2 rounded-full ${STATUS_META[option].dot}`}
-              />
-              {option}
-            </label>
-          ))}
-        </div>
-      </fieldset>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label htmlFor="project-start" className="text-ui font-medium">
-            시작일 <span className="text-accent">*</span>
-          </label>
-          <input
-            id="project-start"
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            className={`${inputBase} mt-1.5`}
-          />
-        </div>
-        <div>
-          <label htmlFor="project-end" className="text-ui font-medium">
-            종료일 <span className="text-accent">*</span>
-          </label>
-          <input
-            id="project-end"
-            type="date"
-            value={endDate}
-            min={startDate}
-            onChange={(event) => setEndDate(event.target.value)}
-            className={`${inputBase} mt-1.5`}
-          />
-        </div>
-      </div>
 
       <div>
         <label htmlFor="project-summary" className="text-ui font-medium">

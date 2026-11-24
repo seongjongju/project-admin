@@ -1,4 +1,18 @@
 const DAY_MS = 86_400_000;
+const SEOUL_DATE = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+/** Date -> 한국 시간 기준 "YYYY-MM-DD". 브라우저 시간대와 무관하게 하루를 판단한다. */
+export function toSeoulDateKey(date: Date) {
+  const parts = SEOUL_DATE.formatToParts(date);
+  const part = (type: string) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
+}
 
 /** Date -> "YYYY-MM-DD" (browser local time) */
 export function toDateKey(date: Date) {
@@ -21,12 +35,23 @@ export function diffDays(from: string, to: string) {
   return Math.round((utc(to) - utc(from)) / DAY_MS);
 }
 
+/** 날짜의 월만 앞뒤로 이동한다. 말일은 대상 월의 마지막 날로 보정한다. */
+export function shiftMonth(key: string, delta: number) {
+  const [year, month, day] = key.split("-").map(Number);
+  const first = new Date(year, month - 1 + delta, 1);
+  const lastDay = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return toDateKey(
+    new Date(first.getFullYear(), first.getMonth(), Math.min(day, lastDay)),
+  );
+}
+
 export function formatDate(key: string) {
   const [year, month, day] = key.split("-").map(Number);
   return `${year}년 ${month}월 ${day}일`;
 }
 
 export function formatRange(start: string, end: string) {
+  if (!start || !end) return "일정 없음";
   return start === end ? formatDate(start) : `${formatDate(start)} ~ ${formatDate(end)}`;
 }
 
@@ -36,6 +61,36 @@ export function formatRangeCompact(start: string, end: string) {
     return `${start.replace(/-/g, ".")} ~ ${end.replace(/-/g, ".")}`;
   }
   return `${start.slice(5).replace("-", ".")} ~ ${end.slice(5).replace("-", ".")}`;
+}
+
+/** "YYYY-MM-DD" -> 요일(0=일요일). UTC 기준이라 시간대 영향이 없다. */
+export function weekdayOf(key: string) {
+  return new Date(utc(key)).getUTCDay();
+}
+
+/** 기간을 보이는 구간에 자른다. 겹치지 않으면 null. */
+export function overlapRange(
+  start: string,
+  end: string,
+  from: string,
+  to: string,
+) {
+  const first = start > from ? start : from;
+  const last = end < to ? end : to;
+  return first <= last ? ([first, last] as const) : null;
+}
+
+/** 날짜 칸 클릭으로 시작일/끝일을 바꿀 때 항상 start <= end 를 유지한다. */
+export function applyDateTarget(
+  target: "start" | "end",
+  day: string,
+  start: string,
+  end: string,
+): [string, string] {
+  if (target === "start") {
+    return day <= end ? [day, end] : [end, day];
+  }
+  return day >= start ? [start, day] : [day, start];
 }
 
 export function startOfMonth(date: Date) {

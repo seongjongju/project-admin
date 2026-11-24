@@ -13,11 +13,15 @@
   --color-ink: #1b1d1b;
   --color-muted: #6b706b;
   --color-line: #d2d7d0;
+  --color-grid: #e0e0e0;
+  --color-schedule: #f8f8f8;
   --color-danger: #a33b2b;
   --color-planned: #e1e4dc;
   --color-planned-ink: #4f554f;
   --color-sunday: #b3261e;
   --color-saturday: #1d4ed8;
+  --color-today: #fff0b3;
+  --color-today-ink: #6b5400;
   --text-ui: 14px;
   --text-ui--line-height: 1.65;
   --text-title: 22px;

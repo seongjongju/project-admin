@@ -46,3 +46,6 @@ next-env.d.ts
 AGENTS.md*
 WORK_LOG.md*
 기능정의서.md*
+
+# agents
+.agents/

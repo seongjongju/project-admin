@@ -13,6 +13,9 @@
 --     (면접관이 수정·삭제해도 같은 스크립트를 다시 실행하면 원래 상태로 돌아온다.)
 --   · 날짜는 실행한 날(current_date) 기준 상대 날짜다.
 --   · 먼저 schema.sql 을 실행해 두어야 한다.
+--   · status 는 '진행예정' / '진행중' / '완료' 세 값만 쓴다(schema.sql check 제약과 동일).
+--     아래 샘플 6개는 모두 값을 직접 적고 있으며, 날짜와도 맞물리게 구성했다.
+--   · 일정은 project_schedules 에 여러 개 넣는다. 프로젝트 기간은 이 일정들에서 계산된다.
 --   · Supabase 대시보드 > SQL Editor 에서 실행한다(RLS를 우회하는 관리자 권한).
 -- ===========================================================================
 
@@ -138,6 +141,20 @@ begin
     '다음 달에 시작할 개인 작업의 화면과 일정 정리',
     '기획', '', ''
   );
+
+  -- 4-1. 프로젝트 일정 (상태는 프로젝트 상태와 독립) -----------------------
+  insert into project_schedules (project_id, title, start_date, end_date, status) values
+    (v_p1, '상세페이지 마크업', v_month, v_today + 3, '진행중'),
+    (v_p1, '옵션 인터랙션', v_today + 4, v_today + 10, '진행예정'),
+    (v_p2, '랜딩 페이지 퍼블리싱', v_prev + 19, least(v_today, v_month + 4), '완료'),
+    (v_p3, '어드민 목록 화면', v_next + 2, v_next + 12, '진행예정'),
+    (v_p3, '어드민 상세 화면', v_next + 13, v_next + 21, '진행예정'),
+    (v_p4, '포트폴리오 기획', v_prev + 14, v_prev + 25, '완료'),
+    (v_p4, '포트폴리오 개발', v_prev + 26, v_today + 20, '진행중'),
+    ((select id from projects where user_id = v_user and title = '날씨 대시보드'),
+     '날씨 API 연동', v_prev + 2, v_prev + 19, '완료'),
+    ((select id from projects where user_id = v_user and title = '사이드 프로젝트 기획'),
+     '화면 구성 정리', v_next + 9, v_next + 23, '진행예정');
 
   -- 5. 사용 스택 연결 ------------------------------------------------------
   insert into project_stacks (project_id, stack_id)
