@@ -289,6 +289,7 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
         <Modal title="프로젝트 등록" onClose={() => setCreating(false)}>
           <ProjectForm
             initial={blankProject(kind)}
+            lockedKind={kind}
             submitLabel="등록"
             onSubmit={handleCreate}
             onCancel={() => setCreating(false)}

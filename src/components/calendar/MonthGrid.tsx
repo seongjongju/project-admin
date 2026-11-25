@@ -171,7 +171,7 @@ export default function MonthGrid({
         {["일", "월", "화", "수", "목", "금", "토"].map((label, index) => (
           <div
             key={label}
-            className={`py-1.5 text-center text-ui font-strong ${
+            className={`border-r border-grid py-1.5 text-center text-ui font-strong last:border-r-0 bg-[#f8f8f8] ${
               index === 0
                 ? "text-sunday"
                 : index === 6
@@ -195,7 +195,7 @@ export default function MonthGrid({
           return (
             <div
               key={week.days[0].key}
-              className="border-b border-line last:border-b-0"
+              className="border-b border-grid last:border-b-0"
               style={{ minHeight: cellSize || undefined }}
             >
               <div className="grid grid-cols-7">
@@ -211,7 +211,7 @@ export default function MonthGrid({
                   return (
                     <div
                       key={day.key}
-                      className="flex h-6 items-center justify-center md:h-7"
+                      className="flex h-6 items-center justify-center border-r border-grid last:border-r-0 md:h-7"
                     >
                       <button
                         type="button"
@@ -242,7 +242,7 @@ export default function MonthGrid({
               </div>
 
               <div
-                className="relative hidden sm:block"
+                className="relative hidden border-t border-grid sm:block"
                 style={{
                   height: segments.length
                     ? LANE_TOP + laneCount * LANE_PITCH
@@ -312,17 +312,21 @@ export default function MonthGrid({
                 })}
               </div>
 
-              <div className="grid grid-cols-7 sm:hidden">
+              <div className="grid grid-cols-7 border-t border-grid sm:hidden">
                 {week.days.map((day) => {
                   const dayItems = items.filter(
                     (item) =>
                       item.startDate <= day.key && item.endDate >= day.key,
                   );
+                  // 같은 상태가 여러 개여도 마크는 한 번만, 범례 순서로 보여준다.
+                  const statuses = PROJECT_STATUSES.filter((status) =>
+                    dayItems.some((item) => item.status === status),
+                  );
 
                   return (
                     <div
                       key={day.key}
-                      className="flex h-4 items-center justify-center"
+                      className="flex h-4 items-center justify-center border-r border-grid last:border-r-0"
                     >
                       {dayItems.length === 1 ? (
                         <button
@@ -342,10 +346,16 @@ export default function MonthGrid({
                         <button
                           type="button"
                           onClick={() => onDayOpen(day.key)}
-                          aria-label={`${formatDate(day.key)} 일정 ${dayItems.length}개 보기`}
-                          className="flex h-full w-full items-center justify-center text-ui leading-none font-medium text-accent"
+                          aria-label={`${formatDate(day.key)} 일정 ${dayItems.length}개 보기: ${statuses.join(", ")}`}
+                          className="flex h-full w-full items-center justify-center gap-0.5"
                         >
-                          {dayItems.length}
+                          {statuses.map((status) => (
+                            <span
+                              key={status}
+                              aria-hidden="true"
+                              className={`h-2 w-2 shrink-0 rounded-[2px] ${STATUS_META[status].dot}`}
+                            />
+                          ))}
                         </button>
                       ) : null}
                     </div>

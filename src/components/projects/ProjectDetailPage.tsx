@@ -142,6 +142,7 @@ export default function ProjectDetailPage({ id }: { id: string }) {
         >
           <ProjectForm
             initial={project}
+            lockedKind={project.kind}
             submitLabel="저장"
             onSubmit={handleEdit}
             onCancel={() => setEditing(false)}

@@ -69,9 +69,6 @@ export default function Modal({ title, onClose, children }: ModalProps) {
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) event.preventDefault();
       }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
     >
       <div
         ref={panelRef}
@@ -85,7 +82,7 @@ export default function Modal({ title, onClose, children }: ModalProps) {
         <div className="flex items-start justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6">
           <h2
             id="modal-title"
-            className="text-modal font-semibold tracking-[-0.01em]"
+            className="text-modal font-semibold tracking-[-0.01em] break-words"
           >
             {title}
           </h2>

@@ -19,6 +19,8 @@ type ProjectFormProps = {
   submitLabel: string;
   onSubmit: (input: ProjectInput) => Promise<void>;
   onCancel: () => void;
+  /** 유형 선택을 숨기고 이 값으로 고정. 수정 화면에서는 기존 값을 넘긴다. */
+  lockedKind?: ProjectKind;
 };
 
 export default function ProjectForm({
@@ -26,9 +28,10 @@ export default function ProjectForm({
   submitLabel,
   onSubmit,
   onCancel,
+  lockedKind,
 }: ProjectFormProps) {
   const [title, setTitle] = useState(initial.title);
-  const [kind, setKind] = useState<ProjectKind | "">(initial.kind);
+  const [kind, setKind] = useState<ProjectKind | "">(lockedKind ?? initial.kind);
   const [categoryId, setCategoryId] = useState(initial.categoryId);
   const [summary, setSummary] = useState(initial.summary);
   const [role, setRole] = useState(initial.role);
@@ -103,33 +106,35 @@ export default function ProjectForm({
         />
       </div>
 
-      <fieldset>
-        <legend className="text-ui font-medium">
-          유형 <span className="text-accent">*</span>
-        </legend>
-        <div className="mt-1.5 flex gap-2">
-          {PROJECT_KINDS.map((option) => (
-            <label
-              key={option}
-              className={`flex h-10 items-center gap-2 rounded-[2px] border px-3 text-ui ${
-                kind === option
-                  ? "border-accent bg-accent-soft text-accent"
-                  : "border-line text-ink"
-              }`}
-            >
-              <input
-                type="radio"
-                name="project-kind"
-                value={option}
-                checked={kind === option}
-                onChange={() => changeKind(option)}
-                className="h-4 w-4 accent-accent"
-              />
-              {option}
-            </label>
-          ))}
-        </div>
-      </fieldset>
+      {!lockedKind && (
+        <fieldset>
+          <legend className="text-ui font-medium">
+            유형 <span className="text-accent">*</span>
+          </legend>
+          <div className="mt-1.5 flex gap-2">
+            {PROJECT_KINDS.map((option) => (
+              <label
+                key={option}
+                className={`flex h-10 items-center gap-2 rounded-[2px] border px-3 text-ui ${
+                  kind === option
+                    ? "border-accent bg-accent-soft text-accent"
+                    : "border-line text-ink"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="project-kind"
+                  value={option}
+                  checked={kind === option}
+                  onChange={() => changeKind(option)}
+                  className="h-4 w-4 accent-accent"
+                />
+                {option}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
 
       {kind === "회사" && (
         <CategoryField value={categoryId} onChange={setCategoryId} />

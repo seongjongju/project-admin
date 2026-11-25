@@ -59,9 +59,17 @@ export default function ProjectDetail({
         </p>
       </header>
 
+      <Value>
+        {project.memo ? (
+          <span className="whitespace-pre-wrap text-ink/85">{project.memo}</span>
+        ) : (
+          "—"
+        )}
+      </Value>
+
       <dl className="border-t border-line">
         {project.kind === "회사" && (
-          <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
+          <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
             <dt className="text-ui text-muted">종류</dt>
             <dd>
               <Value>{project.category || "—"}</Value>
@@ -69,21 +77,21 @@ export default function ProjectDetail({
           </div>
         )}
 
-        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
+        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
           <dt className="text-ui text-muted">한 줄 소개</dt>
           <dd>
             <Value>{project.summary || "—"}</Value>
           </dd>
         </div>
 
-        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
+        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
           <dt className="text-ui text-muted">내 역할</dt>
           <dd>
             <Value>{project.role || "—"}</Value>
           </dd>
         </div>
 
-        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
+        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
           <dt className="text-ui text-muted">링크</dt>
           <dd>
             {project.url ? (
@@ -101,7 +109,7 @@ export default function ProjectDetail({
           </dd>
         </div>
 
-        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
+        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_minmax(0,1fr)] sm:gap-4">
           <dt className="text-ui text-muted">사용 스택</dt>
           <dd>
             {project.stacks.length > 0 ? (
@@ -121,20 +129,6 @@ export default function ProjectDetail({
           </dd>
         </div>
 
-        <div className="grid gap-1 border-b border-line py-3 sm:grid-cols-[7rem_1fr] sm:gap-4">
-          <dt className="text-ui text-muted">메모</dt>
-          <dd>
-            <Value>
-              {project.memo ? (
-                <span className="whitespace-pre-wrap text-ink/85">
-                  {project.memo}
-                </span>
-              ) : (
-                "—"
-              )}
-            </Value>
-          </dd>
-        </div>
       </dl>
 
       {children}

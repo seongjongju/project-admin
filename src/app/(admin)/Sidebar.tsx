@@ -5,9 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
+// 회사 프로젝트는 주소로만 접근한다. 메뉴에는 노출하지 않는다.
 const menus = [
   { href: "/", label: "홈" },
-  { href: "/company", label: "회사 프로젝트" },
   { href: "/personal", label: "개인 프로젝트" },
 ];
 
