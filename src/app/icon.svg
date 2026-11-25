@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <rect width="48" height="48" rx="10" fill="#e7f0ec" />
+  <!-- 뒤 판: 오른쪽 아래로 4px 밀어 3D 두께를 만든다 -->
+  <rect x="12" y="10" width="28" height="30" rx="3" fill="#123f3a" />
+  <rect x="10" y="8" width="28" height="30" rx="3" fill="#ffffff" stroke="#1e5f57" stroke-width="2" />
+  <path d="M12 8h24a2 2 0 0 1 2 2v6H10v-6a2 2 0 0 1 2-2z" fill="#1e5f57" />
+  <rect x="16" y="5" width="3" height="7" rx="1.5" fill="#dc2626" />
+  <rect x="29" y="5" width="3" height="7" rx="1.5" fill="#dc2626" />
+  <circle cx="17" cy="23" r="1.8" fill="#6b706b" />
+  <circle cx="24" cy="23" r="1.8" fill="#6b706b" />
+  <circle cx="31" cy="23" r="1.8" fill="#dc2626" />
+  <circle cx="17" cy="31" r="1.8" fill="#6b706b" />
+  <circle cx="24" cy="31" r="1.8" fill="#6b706b" />
+  <circle cx="31" cy="31" r="1.8" fill="#6b706b" />
+</svg>
