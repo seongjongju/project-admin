@@ -110,7 +110,7 @@ export default function ProjectFilterBar({
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-wrap gap-3 lg:flex-nowrap">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-nowrap">
           <div className="min-w-0 flex-1">
             <label htmlFor="created-from" className="text-ui font-medium">
               등록일 시작

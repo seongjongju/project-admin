@@ -137,6 +137,10 @@ function fail(error: DbError, fallback: string): never {
     ],
     ["TITLE_REQUIRED", "프로젝트 이름을 입력해 주세요."],
     ["OPTION_NAME_REQUIRED", "이름을 입력해 주세요."],
+    [
+      "STACK_IN_USE",
+      "이미 사용 중인 스택입니다. 프로젝트에서 스택을 해제한 뒤 다시 시도해 주세요.",
+    ],
     ["SCHEDULE_TITLE_REQUIRED", "일정 제목을 입력해 주세요."],
     ["SCHEDULE_DATE_REQUIRED", "일정의 시작날짜와 끝날짜를 입력해 주세요."],
     ["SCHEDULE_DATE_ORDER", "끝날짜는 시작날짜보다 빠를 수 없습니다."],
@@ -268,19 +272,19 @@ export function newId() {
     : `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-export async function listStacks(): Promise<string[]> {
+export async function listStacks(): Promise<Option[]> {
   const { data, error } = await client()
     .from("stacks")
-    .select("name")
+    .select("id, name")
     .order("name");
 
   if (error) {
     fail(error, "스택 목록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
   }
-  return (data ?? []).map((row: { name: string }) => row.name);
+  return (data ?? []) as Option[];
 }
 
-export async function addStack(name: string): Promise<string> {
+export async function addStack(name: string): Promise<Option> {
   const value = name.trim();
   if (!value) throw new Error("스택 이름을 입력해 주세요.");
 
@@ -294,7 +298,14 @@ export async function addStack(name: string): Promise<string> {
   }
   const row = (data as Option[] | null)?.[0];
   if (!row) throw new Error("스택을 저장하지 못했습니다. 다시 시도해 주세요.");
-  return row.name;
+  return row;
+}
+
+export async function deleteStack(id: string): Promise<void> {
+  const { error } = await client().rpc("delete_stack", { p_id: id });
+  if (error) {
+    fail(error, "스택을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
 }
 
 export async function listCategories(): Promise<Option[]> {

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   addCategory,
   addStack,
+  deleteStack,
   listCategories,
   listStacks,
   type Option,
@@ -117,7 +118,7 @@ export function StackField({
   selected: string[];
   onChange: (stacks: string[]) => void;
 }) {
-  const [options, setOptions] = useState<string[]>([]);
+  const [options, setOptions] = useState<Option[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -137,13 +138,13 @@ export function StackField({
     if (pending) return;
     setPending(true);
     try {
-      const canonical = await addStack(name);
+      const option = await addStack(name);
       setOptions((previous) =>
-        previous.some((item) => item === canonical)
+        previous.some((item) => item.id === option.id)
           ? previous
-          : [...previous, canonical],
+          : [...previous, option].sort((a, b) => a.name.localeCompare(b.name)),
       );
-      select(canonical);
+      select(option.name);
       setName("");
       setError("");
     } catch (err) {
@@ -153,7 +154,24 @@ export function StackField({
     }
   }
 
-  const available = options.filter((option) => !selected.includes(option));
+  async function remove(option: Option) {
+    if (pending) return;
+    setPending(true);
+    try {
+      await deleteStack(option.id);
+      setOptions((previous) => previous.filter((item) => item.id !== option.id));
+      if (selected.includes(option.name)) {
+        onChange(selected.filter((item) => item !== option.name));
+      }
+      setError("");
+    } catch (err) {
+      setError(messageOf(err));
+    } finally {
+      setPending(false);
+    }
+  }
+
+  const available = options.filter((option) => !selected.includes(option.name));
 
   return (
     <fieldset>
@@ -175,11 +193,38 @@ export function StackField({
       >
         <option value="">스택 선택</option>
         {available.map((option) => (
-          <option key={option} value={option}>
-            {option}
+          <option key={option.id} value={option.name}>
+            {option.name}
           </option>
         ))}
       </select>
+
+      {options.length > 0 && (
+        <div className="mt-2">
+          <p className="text-ui text-muted">
+            저장된 스택 삭제 (사용 중인 스택은 삭제할 수 없습니다)
+          </p>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {options.map((option) => (
+              <span
+                key={option.id}
+                className="inline-flex items-center gap-1 rounded-[2px] border border-line px-2 py-1 text-ui text-muted"
+              >
+                {option.name}
+                <button
+                  type="button"
+                  onClick={() => remove(option)}
+                  disabled={pending}
+                  aria-label={`${option.name} 스택 삭제`}
+                  className="text-danger hover:text-danger/80 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {selected.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">

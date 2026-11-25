@@ -223,7 +223,7 @@ create policy project_schedules_delete on public.project_schedules
     )
   );
 
--- stacks / categories (조회, 추가만. 삭제 UI는 아직 없어 delete 정책을 두지 않는다)
+-- stacks / categories (조회·추가. 스택은 미사용일 때만 삭제)
 drop policy if exists stacks_select on public.stacks;
 create policy stacks_select on public.stacks
   for select to authenticated using (user_id = auth.uid());
@@ -231,6 +231,10 @@ create policy stacks_select on public.stacks
 drop policy if exists stacks_insert on public.stacks;
 create policy stacks_insert on public.stacks
   for insert to authenticated with check (user_id = auth.uid());
+
+drop policy if exists stacks_delete on public.stacks;
+create policy stacks_delete on public.stacks
+  for delete to authenticated using (user_id = auth.uid());
 
 drop policy if exists categories_select on public.categories;
 create policy categories_select on public.categories
@@ -368,6 +372,22 @@ begin
   else
     raise exception 'OPTION_KIND_INVALID';
   end if;
+end;
+$$;
+
+-- 5-1-1. 스택 삭제. 연결된 프로젝트가 있으면 삭제하지 않는다(공유 목록 보호).
+create or replace function public.delete_stack(p_id uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = public
+as $$
+begin
+  if exists (select 1 from public.project_stacks ps where ps.stack_id = p_id) then
+    raise exception 'STACK_IN_USE';
+  end if;
+
+  delete from public.stacks s where s.id = p_id and s.user_id = auth.uid();
 end;
 $$;
 
@@ -574,6 +594,7 @@ revoke all on function public.save_project_schedule(uuid, jsonb) from public;
 revoke all on function public.save_project_records(uuid, jsonb, jsonb) from public;
 
 grant execute on function public.add_option(text, text) to authenticated;
+grant execute on function public.delete_stack(uuid) to authenticated;
 grant execute on function public.save_project(uuid, jsonb) to authenticated;
 grant execute on function public.save_project_schedule(uuid, jsonb) to authenticated;
 grant execute on function public.save_project_records(uuid, jsonb, jsonb) to authenticated;
@@ -583,7 +604,7 @@ grant execute on function public.save_project_records(uuid, jsonb, jsonb) to aut
 -- RLS 정책과 같은 범위로 최소 권한만 준다. anon(로그인 전)에게는 주지 않는다.
 grant select, insert, update, delete on public.projects to authenticated;
 grant select, insert, update, delete on public.project_schedules to authenticated;
-grant select, insert on public.stacks to authenticated;
+grant select, insert, delete on public.stacks to authenticated;
 grant select, insert on public.categories to authenticated;
 grant select, insert, delete on public.project_stacks to authenticated;
 grant select, insert, delete on public.troubles to authenticated;
