@@ -99,3 +99,24 @@
     font-size: 16px;
   }
 }
+
+/* iOS(WebKit)의 날짜 입력은 OS가 그리는 부품이라 padding을 폭에 더해 계산해
+   오른쪽으로 넘친다. OS 껍데기를 벗겨 공통 입력창 폭 규칙을 따르게 한다.
+   WebKit만 아는 -apple-pay-button과 터치 기기 조건을 함께 확인해 iOS에만 적용한다.
+   (-webkit-touch-callout 감지는 프로덕션 CSS 압축에서 제거되어 쓸 수 없다.) */
+@media (hover: none) {
+  @supports (-webkit-appearance: -apple-pay-button) {
+    input[type="date"],
+    input[type="time"],
+    input[type="datetime-local"],
+    input[type="month"],
+    input[type="week"] {
+      -webkit-appearance: none;
+      appearance: none;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      text-align: left;
+    }
+  }
+}
