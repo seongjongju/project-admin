@@ -1,5 +1,6 @@
 import { CONFIG_ERROR, hasSupabaseConfig } from "./supabase/config";
 import { createClient } from "./supabase/client";
+import { storageFileName, validateFiles } from "./files";
 
 /**
  * 데이터 접근 계층. 화면은 이 파일의 함수만 쓰고, 여기서 Supabase를 호출한다.
@@ -586,5 +587,160 @@ export async function deleteProject(id: string): Promise<void> {
   const { error } = await client().from("projects").delete().eq("id", id);
   if (error) {
     fail(error, "삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 첨부 파일. Storage 객체와 project_files 메타를 함께 관리한다.
+// ---------------------------------------------------------------------------
+
+export type ProjectFile = {
+  id: string;
+  name: string;
+  size: number;
+  path: string;
+  contentType: string;
+  createdAt: string;
+};
+
+const FILE_BUCKET = "project-files";
+
+export async function listProjectFiles(
+  projectId: string,
+): Promise<ProjectFile[]> {
+  const { data, error } = await client()
+    .from("project_files")
+    .select("id, name, size, path, content_type, created_at")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    fail(error, "첨부 파일을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    name: String(row.name),
+    size: Number(row.size),
+    path: String(row.path),
+    contentType: String(row.content_type ?? ""),
+    createdAt: String(row.created_at),
+  }));
+}
+
+/** 1시간짜리 서명 URL. 비공개 버킷이라 미리보기·다운로드에 필요하다. */
+export async function getProjectFileUrls(paths: string[]): Promise<string[]> {
+  if (!paths.length) return [];
+  const { data, error } = await client()
+    .storage.from(FILE_BUCKET)
+    .createSignedUrls(paths, 60 * 60);
+
+  if (error) {
+    fail(error, "파일 주소를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.");
+  }
+  return (data ?? []).map((item) => item.signedUrl ?? "");
+}
+
+/** 서명 URL에 원본 파일명을 붙여 서버가 Content-Disposition으로 내려주게 한다. */
+export function withDownloadName(url: string, name: string) {
+  if (!url) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}download=${encodeURIComponent(name)}`;
+}
+
+export async function uploadProjectFiles(
+  projectId: string,
+  files: (File | null)[],
+): Promise<void> {
+  const selected = files.filter((file): file is File => Boolean(file));
+  if (!selected.length) return;
+  const invalid = validateFiles(selected);
+  if (invalid) throw new Error(invalid);
+
+  const supabase = client();
+  const { data, error: userError } = await supabase.auth.getUser();
+  if (userError || !data.user) {
+    if (typeof window !== "undefined") window.location.replace("/login");
+    throw new Error("세션이 만료되었어요. 다시 로그인해 주세요.");
+  }
+  const user = data.user;
+  const uploaded: string[] = [];
+  const insertedIds: string[] = [];
+
+  try {
+    for (const file of selected) {
+      // Supabase Storage는 경로에 한글·공백·%를 허용하지 않는다. 원본명은 DB에 저장한다.
+      const safeName = storageFileName(file.name);
+      const path = `${user.id}/${projectId}/${crypto.randomUUID()}-${safeName}`;
+      const contentType = file.type || "application/octet-stream";
+
+      const { error: uploadError } = await supabase.storage
+        .from(FILE_BUCKET)
+        .upload(path, file, { contentType, upsert: false });
+      if (uploadError) {
+        fail(
+          uploadError,
+          `"${file.name}"을(를) 올리지 못했습니다. 다시 시도해 주세요.`,
+        );
+      }
+      uploaded.push(path);
+
+      const { data: inserted, error: dbError } = await supabase
+        .from("project_files")
+        .insert({
+          project_id: projectId,
+          user_id: user.id,
+          path,
+          name: file.name,
+          size: file.size,
+          content_type: contentType,
+        })
+        .select("id")
+        .single();
+      if (dbError) {
+        fail(
+          dbError,
+          `"${file.name}" 정보를 저장하지 못했습니다. 다시 시도해 주세요.`,
+        );
+      }
+      insertedIds.push(String(inserted.id));
+    }
+  } catch (error) {
+    if (uploaded.length) {
+      await supabase.storage.from(FILE_BUCKET).remove(uploaded);
+    }
+    if (insertedIds.length) {
+      await supabase.from("project_files").delete().in("id", insertedIds);
+    }
+    throw error;
+  }
+}
+
+export async function deleteProjectFiles(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const supabase = client();
+  const { data, error } = await supabase
+    .from("project_files")
+    .select("path")
+    .in("id", ids);
+  if (error) {
+    fail(error, "첨부 파일 정보를 불러오지 못했습니다. 다시 시도해 주세요.");
+  }
+
+  const paths = (data ?? []).map((row) => String(row.path));
+  if (paths.length) {
+    const { error: storageError } = await supabase.storage
+      .from(FILE_BUCKET)
+      .remove(paths);
+    if (storageError) {
+      fail(storageError, "첨부 파일을 지우지 못했습니다. 다시 시도해 주세요.");
+    }
+  }
+
+  const { error: dbError } = await supabase
+    .from("project_files")
+    .delete()
+    .in("id", ids);
+  if (dbError) {
+    fail(dbError, "첨부 파일 정보를 지우지 못했습니다. 다시 시도해 주세요.");
   }
 }

@@ -9,9 +9,11 @@ type ModalProps = {
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  /** 이미지 크게보기처럼 넓은 화면이 필요할 때만 사용한다. */
+  wide?: boolean;
 };
 
-export default function Modal({ title, onClose, children }: ModalProps) {
+export default function Modal({ title, onClose, children, wide = false }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const onCloseRef = useRef(onClose);
   useEffect(() => {
@@ -77,7 +79,9 @@ export default function Modal({ title, onClose, children }: ModalProps) {
         aria-labelledby="modal-title"
         tabIndex={-1}
         onKeyDown={handleKeyDown}
-        className="flex max-h-[88dvh] w-full flex-col rounded-t-[4px] border border-line bg-surface outline-none sm:max-h-[calc(100dvh-4rem)] sm:max-w-[480px] sm:rounded-[2px]"
+        className={`flex max-h-[88dvh] w-full flex-col rounded-t-[4px] border border-line bg-surface outline-none sm:max-h-[calc(100dvh-4rem)] sm:rounded-[2px] ${
+          wide ? "sm:max-w-[min(960px,90vw)]" : "sm:max-w-[480px]"
+        }`}
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6">
           <h2

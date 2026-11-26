@@ -1,13 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import type {
-  Project,
-  ProjectStatus,
-  ScheduleInput,
+import { useEffect, useState } from "react";
+import {
+  listProjectFiles,
+  type Project,
+  type ProjectFile,
+  type ProjectStatus,
+  type ScheduleInput,
 } from "@/lib/store";
 import { KindBadge, StatusBadgeMenu } from "./ProjectBadges";
+import ProjectFiles from "./ProjectFiles";
 import ProjectTimeline from "./ProjectTimeline";
 
 type ProjectCardProps = {
@@ -35,7 +38,28 @@ export default function ProjectCard({
   onDeleteSchedule,
 }: ProjectCardProps) {
   const [memoOpen, setMemoOpen] = useState(false);
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [filesError, setFilesError] = useState("");
   const memoId = `project-memo-${project.id}`;
+
+  useEffect(() => {
+    let active = true;
+    listProjectFiles(project.id)
+      .then((list) => {
+        if (active) setFiles(list);
+      })
+      .catch((err: unknown) => {
+        if (!active) return;
+        setFilesError(
+          err instanceof Error
+            ? err.message
+            : "첨부 파일을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        );
+      });
+    return () => {
+      active = false;
+    };
+  }, [project.id]);
 
   return (
     <li className="border border-line bg-surface">
@@ -101,6 +125,13 @@ export default function ProjectCard({
             )}
           </Field>
         </dl>
+
+        {filesError && (
+          <p role="alert" className="text-ui text-danger">
+            {filesError}
+          </p>
+        )}
+        {files.length > 0 && <ProjectFiles files={files} compact />}
 
         {project.memo && (
           <div className="min-w-0">

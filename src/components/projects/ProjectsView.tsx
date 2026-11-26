@@ -11,6 +11,7 @@ import {
   readListFilter,
   totalPageCount,
   updateProject,
+  uploadProjectFiles,
   upsertSchedule,
   type ListFilter,
   type Project,
@@ -23,6 +24,7 @@ import ProjectCard from "./ProjectCard";
 import ProjectFilterBar from "./ProjectFilterBar";
 import ProjectPagination from "./ProjectPagination";
 import ProjectForm, { type ProjectDraft } from "./ProjectForm";
+import type { AttachmentChanges } from "./FileAttachField";
 
 type ProjectsViewProps = {
   kind: ProjectKind;
@@ -128,8 +130,18 @@ export default function ProjectsView({ kind, title }: ProjectsViewProps) {
     setReloadKey((key) => key + 1);
   }
 
-  async function handleCreate(input: ProjectInput) {
-    await createProject(input);
+  async function handleCreate(
+    input: ProjectInput,
+    attachments: AttachmentChanges,
+  ) {
+    const project = await createProject(input);
+    try {
+      await uploadProjectFiles(project.id, attachments.added);
+    } catch (err) {
+      setError(
+        `프로젝트는 저장됐지만 파일을 올리지 못했습니다. ${messageOf(err)} 상세 페이지에서 다시 첨부해 주세요.`,
+      );
+    }
     setReloadKey((key) => key + 1);
     setCreating(false);
   }

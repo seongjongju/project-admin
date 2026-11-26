@@ -6,20 +6,32 @@ import { useEffect, useState } from "react";
 import Modal from "@/components/ui/Modal";
 import {
   deleteProject,
+  deleteProjectFiles,
   getProject,
+  listProjectFiles,
   saveProjectRecords,
   updateProject,
+  uploadProjectFiles,
   type Project,
+  type ProjectFile,
   type ProjectInput,
 } from "@/lib/store";
+import type { AttachmentChanges } from "./FileAttachField";
 import ProjectDetail from "./ProjectDetail";
+import ProjectFiles from "./ProjectFiles";
 import ProjectForm from "./ProjectForm";
 import ProjectRecords from "./ProjectRecords";
+
+function messageOf(error: unknown) {
+  return error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.";
+}
 
 export default function ProjectDetailPage({ id }: { id: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [project, setProject] = useState<Project | null | undefined>(undefined);
+  const [files, setFiles] = useState<ProjectFile[]>([]);
+  const [fileError, setFileError] = useState("");
   const [loadError, setLoadError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -38,6 +50,17 @@ export default function ProjectDetailPage({ id }: { id: string }) {
             : "프로젝트를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
         );
       });
+    // 파일은 별도로 읽는다. 첨부 기능 SQL을 안 넣은 DB에서도 프로젝트는 보이게 한다.
+    listProjectFiles(id)
+      .then((data) => {
+        if (active) {
+          setFiles(data);
+          setFileError("");
+        }
+      })
+      .catch((err) => {
+        if (active) setFileError(messageOf(err));
+      });
     return () => {
       active = false;
     };
@@ -49,11 +72,22 @@ export default function ProjectDetailPage({ id }: { id: string }) {
     listQuery ? `?${listQuery}` : ""
   }`;
 
-  async function handleEdit(input: ProjectInput) {
+  async function handleEdit(
+    input: ProjectInput,
+    attachments: AttachmentChanges,
+  ) {
     if (!project) return;
     const next = await updateProject(project.id, input);
+    await deleteProjectFiles(attachments.removedIds);
+    await uploadProjectFiles(project.id, attachments.added);
     setProject(next);
+    setFiles(await listProjectFiles(project.id));
     setEditing(false);
+  }
+
+  async function handleDeleteFile(file: ProjectFile) {
+    await deleteProjectFiles([file.id]);
+    setFiles((current) => current.filter((item) => item.id !== file.id));
   }
 
   async function handleDelete() {
@@ -132,6 +166,12 @@ export default function ProjectDetailPage({ id }: { id: string }) {
         onEdit={() => setEditing(true)}
         onDelete={handleDelete}
       >
+        <ProjectFiles files={files} onDelete={handleDeleteFile} />
+        {fileError && (
+          <p role="alert" className="text-ui text-danger">
+            {fileError}
+          </p>
+        )}
         <ProjectRecords project={project} onSave={handleRecords} />
       </ProjectDetail>
 
@@ -144,6 +184,7 @@ export default function ProjectDetailPage({ id }: { id: string }) {
             initial={project}
             lockedKind={project.kind}
             submitLabel="저장"
+            initialFiles={files}
             onSubmit={handleEdit}
             onCancel={() => setEditing(false)}
           />

@@ -4,6 +4,7 @@ import {
   mapProjectRow,
   validateProjectInput,
   validateScheduleInput,
+  withDownloadName,
   type ProjectInput,
   type ProjectRow,
 } from "./store";
@@ -182,4 +183,16 @@ test("일정은 제목·날짜 형식·순서·상태를 검사한다", () => {
   expect(() =>
     validateScheduleInput({ ...schedule, status: "모름" as never }),
   ).toThrow("일정 상태를 선택해 주세요.");
+});
+
+test("서명 URL에 원본 파일명을 다운로드 이름으로 붙인다", () => {
+  const url = "https://example.supabase.co/object/sign/file?token=abc";
+
+  expect(withDownloadName(url, "한글 문서.docx")).toBe(
+    `${url}&download=${encodeURIComponent("한글 문서.docx")}`,
+  );
+  expect(withDownloadName("https://example.com/file", "report.pdf")).toBe(
+    `https://example.com/file?download=report.pdf`,
+  );
+  expect(withDownloadName("", "report.pdf")).toBe("");
 });

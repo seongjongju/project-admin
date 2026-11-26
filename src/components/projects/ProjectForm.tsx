@@ -1,12 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import { validateFiles } from "@/lib/files";
 import {
   PROJECT_KINDS,
   isValidProjectUrl,
+  type ProjectFile,
   type ProjectInput,
   type ProjectKind,
 } from "@/lib/store";
+import FileAttachField, {
+  type AttachmentChanges,
+} from "./FileAttachField";
 import { CategoryField, StackField } from "./ProjectOptionFields";
 import { inputBase } from "./formStyles";
 
@@ -17,10 +22,14 @@ export type ProjectDraft = Omit<ProjectInput, "kind"> & {
 type ProjectFormProps = {
   initial: ProjectDraft;
   submitLabel: string;
-  onSubmit: (input: ProjectInput) => Promise<void>;
+  onSubmit: (
+    input: ProjectInput,
+    attachments: AttachmentChanges,
+  ) => Promise<void>;
   onCancel: () => void;
   /** 유형 선택을 숨기고 이 값으로 고정. 수정 화면에서는 기존 값을 넘긴다. */
   lockedKind?: ProjectKind;
+  initialFiles?: ProjectFile[];
 };
 
 export default function ProjectForm({
@@ -29,6 +38,7 @@ export default function ProjectForm({
   onSubmit,
   onCancel,
   lockedKind,
+  initialFiles = [],
 }: ProjectFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [kind, setKind] = useState<ProjectKind | "">(lockedKind ?? initial.kind);
@@ -38,6 +48,10 @@ export default function ProjectForm({
   const [url, setUrl] = useState(initial.url);
   const [stacks, setStacks] = useState<string[]>(initial.stacks);
   const [memo, setMemo] = useState(initial.memo);
+  const [attachments, setAttachments] = useState<AttachmentChanges>({
+    added: [],
+    removedIds: [],
+  });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -63,20 +77,32 @@ export default function ProjectForm({
       return;
     }
 
+    const added = attachments.added.filter(
+      (file): file is File => Boolean(file),
+    );
+    const invalidFile = validateFiles(added);
+    if (invalidFile) {
+      setError(invalidFile);
+      return;
+    }
+
     setError("");
     setSaving(true);
     try {
-      await onSubmit({
-        title: title.trim(),
-        kind,
-        categoryId: kind === "회사" ? categoryId : "",
-        status: initial.status,
-        summary: summary.trim(),
-        role: role.trim(),
-        url: url.trim(),
-        memo: memo.trim(),
-        stacks,
-      });
+      await onSubmit(
+        {
+          title: title.trim(),
+          kind,
+          categoryId: kind === "회사" ? categoryId : "",
+          status: initial.status,
+          summary: summary.trim(),
+          role: role.trim(),
+          url: url.trim(),
+          memo: memo.trim(),
+          stacks,
+        },
+        { added, removedIds: attachments.removedIds },
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -183,6 +209,12 @@ export default function ProjectForm({
       </div>
 
       <StackField selected={stacks} onChange={setStacks} />
+
+      <FileAttachField
+        initialFiles={initialFiles}
+        changes={attachments}
+        onChange={setAttachments}
+      />
 
       <div>
         <label htmlFor="project-memo" className="text-ui font-medium">
