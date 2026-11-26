@@ -137,12 +137,12 @@ test("상태를 하나 고르면 해당 상태만 등록순으로 조회한다",
     ["eq", "status", "진행중"],
     ["gte", "created_at", "2026-11-20T00:00:00+09:00"],
     ["lte", "created_at", "2026-11-24T23:59:59+09:00"],
-    ["order", "created_at", { ascending: true }],
+    ["order", "created_at", { ascending: false }],
     ["range", PAGE_SIZE, PAGE_SIZE * 2 - 1],
   ]);
 });
 
-test("전체 선택은 상태순(status_rank)을 먼저, 그다음 등록순으로 정렬한다", async () => {
+test("전체 선택은 상태순(status_rank)을 먼저, 그다음 등록 최신순으로 정렬한다", async () => {
   mockState.result.data = [row];
 
   await queryProjects({ kind: "회사", q: "", status: "", from: "", to: "", page: 1 });
@@ -150,7 +150,7 @@ test("전체 선택은 상태순(status_rank)을 먼저, 그다음 등록순으�
   expect(mockState.calls.some(([method, column]) => method === "eq" && column === "status")).toBe(false);
   expect(mockState.calls.filter(([method]) => method === "order")).toEqual([
     ["order", "status_rank", { ascending: true }],
-    ["order", "created_at", { ascending: true }],
+    ["order", "created_at", { ascending: false }],
   ]);
 });
 

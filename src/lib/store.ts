@@ -439,10 +439,10 @@ export async function queryProjects(
   if (bounds.from) query.gte("created_at", bounds.from);
   if (bounds.to) query.lte("created_at", bounds.to);
 
-  // 상태를 하나 고르면 등록순, 전체면 상태순(진행중 → 진행예정 → 완료)을 먼저 적용한다.
+  // 상태를 하나 고르면 등록 최신순, 전체면 상태순(진행중 → 진행예정 → 완료)을 먼저 적용한다.
   if (!filter.status) query.order("status_rank", { ascending: true });
   const { data, error, count } = await query
-    .order("created_at", { ascending: true })
+    .order("created_at", { ascending: false })
     .range((page - 1) * PAGE_SIZE, page * PAGE_SIZE - 1);
 
   if (error) {
